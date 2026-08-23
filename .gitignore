@@ -139,3 +139,6 @@ todo.md
 .bmo/
 
 
+
+# figures written by `just save-plots`
+figures/

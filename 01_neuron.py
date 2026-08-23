@@ -32,14 +32,21 @@ the test output below, if you pick the right test to stare at.
      with weights [1, 0] must respond to the first input and completely ignore
      the second -- not the other way around.
 
+  5. Everything above has a picture. A neuron fires on one side of a straight
+     line and stays quiet on the other, and weights and bias are simply where
+     that line sits: the weights tilt it, the bias slides it. boundary_x2()
+     below computes that line, and `just plot 1` draws it.
+
 A test that comes out correct is telling you which of these properties it
 never depended on. That is often more informative than one that comes out
 wrong, so read the whole table, not just the bad rows.
 """
 
+import sys
 from itertools import product
 
-from harness import Cell, ExerciseTable, exact, fmt_int, section, summary
+from harness import (Cell, ExerciseTable, approx, console, exact, fmt_float,
+                     fmt_int, section, summary)
 
 
 # --------------------------------------------------------------- the originals
@@ -60,6 +67,11 @@ def step_broken(z):
     return 1 if z > 0.5 else 0
 
 
+def boundary_x2_broken(x1, weights, bias):
+    """For this x1, the x2 that puts the neuron exactly on the fence."""
+    return -(weights[0] * x1) / weights[1]
+
+
 # -------------------------------------------------------------------- yours
 # Write these two. Until you do, the harness runs with the "yours" column blank,
 # so you can start on either one and see partial progress immediately.
@@ -72,6 +84,19 @@ def weighted_sum(inputs, weights, bias):
 
 def step(z):
     """Turn a number into a decision: fire (1) or stay quiet (0)."""
+    raise NotImplementedError
+
+
+def boundary_x2(x1, weights, bias):
+    """For this x1, the x2 that puts the neuron exactly on the fence.
+
+    The fence is every point where the weighted sum comes out to exactly zero
+    -- one step either side and the answer flips. Given x1, solve for the x2
+    that lands there.
+
+    Assume weights[1] is not zero. (When it is, the fence is a vertical line
+    and no function of x1 can describe it. Nothing here tests that case.)
+    """
     raise NotImplementedError
 
 
@@ -113,6 +138,32 @@ def gate(name, weights, bias, cases, note=""):
     return t.render()
 
 
+def compare(title, original, mine, argnames, cases, note=""):
+    """cases: list of (args_tuple, expected). Same idea as gate(), different shape."""
+    written = is_written(mine, cases[0][0])
+    t = ExerciseTable(
+        title=title,
+        note=note,
+        input_header="arguments",
+        yours_written=written,
+        fmt=fmt_float(2),
+        compare=approx,
+    )
+    for args, want in cases:
+        label = ", ".join(f"{n}={v}" for n, v in zip(argnames, args))
+        t.add(label, want, Cell(original(*args)),
+              Cell(mine(*args)) if written else None)
+    return t.render()
+
+
+def is_written(fn, probe_args):
+    try:
+        fn(*probe_args)
+    except NotImplementedError:
+        return False
+    return True
+
+
 def bits(n):
     """All 0/1 combinations of n inputs, in counting order."""
     return list(product([0, 1], repeat=n))
@@ -120,6 +171,36 @@ def bits(n):
 
 def truth(expected_bits, n=2):
     return list(zip(bits(n), expected_bits))
+
+
+def plot():
+    """Draw what the tables can only describe. Needs all three of yours."""
+    import plots
+
+    if not (ready() and is_written(boundary_x2, (0.0, (1.0, 1.0), -1.5))):
+        console.print("\n[yellow]The gate plots need weighted_sum, step and "
+                      "boundary_x2 written first.[/yellow]")
+        console.print("[dim]Drawing the XOR figure only -- that one needs "
+                      "nothing from you.[/dim]")
+        plots.xor_figure()
+        plots.done("01-xor")
+        return
+
+    def neuron(x, weights, bias):
+        return step(weighted_sum(x, weights, bias))
+
+    # Only gates whose fence is a function of x1 -- a zero second weight makes
+    # it vertical, which boundary_x2 cannot express and the tables never ask for.
+    gates = [
+        ("AND", [1.0, 1.0], -1.5, truth([0, 0, 0, 1])),
+        ("OR", [1.0, 1.0], -0.5, truth([0, 1, 1, 1])),
+        ("NAND", [-1.0, -1.0], 1.5, truth([1, 1, 1, 0])),
+        ("NOR", [-1.0, -1.0], 0.5, truth([1, 0, 0, 0])),
+        ("x1 AND NOT x2", [1.0, -1.0], -0.5, truth([0, 0, 1, 0])),
+    ]
+    plots.gates_figure(gates, neuron, boundary_x2)
+    plots.xor_figure()
+    plots.done("01")
 
 
 if __name__ == "__main__":
@@ -153,6 +234,10 @@ if __name__ == "__main__":
         "x1 AND NOT x2", [1.0, -1.0], -0.5, truth([0, 0, 1, 0]),
         "mixed signs: x1 argues for firing, x2 argues against"))
 
+    results.append(gate(
+        "NOR", [-1.0, -1.0], 0.5, truth([1, 0, 0, 0]),
+        "fires only when both inputs are off"))
+
     # --- three inputs with unequal weights -------------------------------
     results.append(gate(
         "WEIGHTED VOTE", [3.0, 2.0, 1.0], -3.5,
@@ -172,4 +257,22 @@ if __name__ == "__main__":
         ],
         "x1 helps twice as much as x2 hurts; a negative input flips its own sign"))
 
+    results.append(compare(
+        "boundary_x2(x1, weights, bias)", boundary_x2_broken, boundary_x2,
+        ["x1", "weights", "bias"],
+        [
+            ((0.0, (1.0, 1.0), -1.5), +1.50),   # AND's fence, at the left edge
+            ((1.0, (1.0, 1.0), -1.5), +0.50),   # and at the right edge
+            ((0.0, (1.0, 1.0), -0.5), +0.50),   # OR sits lower down
+            ((1.0, (1.0, 1.0), -0.5), -0.50),
+            ((0.0, (1.0, -1.0), -0.5), -0.50),  # a fence that tilts the other way
+            ((1.0, (1.0, -1.0), -0.5), +0.50),
+            ((1.0, (2.0, -1.0), -1.0), +1.00),  # unequal weights tilt it further
+            ((0.0, (-1.0, -1.0), 1.5), +1.50),  # NAND: same fence as AND
+        ],
+        "two points make a line; these are the ends of each gate's fence"))
+
     summary(results)
+
+    if "plot" in sys.argv:
+        plot()

@@ -249,7 +249,30 @@ def run_xor(label, out_fn, hid_fn, w_fn):
     return solved
 
 
+def plot():
+    """The sigmoid always draws. The network's region needs your three."""
+    import plots
+
+    plots.sigmoid_figure(sigmoid, sigmoid_slope)
+
+    if all(is_written(fn, probe) for fn, probe in
+           [(output_delta, (0.5, 1)), (hidden_delta, (0.5, 1.0, 0.2)),
+            (updated_weight, (0.0, 0.5, 1.0, 0.5))]):
+        net = Network(output_delta, hidden_delta, updated_weight)
+        net.train(XOR)
+        plots.network_region_figure(net.predict, net.solves(XOR))
+    else:
+        console.print("\n[yellow]Drawing the sigmoid only.[/yellow]")
+        console.print("[dim]The network's decision surface needs all three "
+                      "functions -- an untrained one has nothing to show.[/dim]")
+    plots.done("03")
+
+
 if __name__ == "__main__":
+    if "plot" in sys.argv:
+        plot()
+        sys.exit(0)
+
     if len(sys.argv) > 1 and sys.argv[1] == "handwired":
         section("XOR by hand -- no training at all")
         net = Network(output_delta_broken, hidden_delta_broken,

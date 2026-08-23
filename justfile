@@ -16,3 +16,11 @@ run N *ARGS:
 
 # same as `just run all`
 all: (run "all")
+
+# open the figures for one exercise, e.g. `just plot 1`
+plot N:
+    @uv run 0{{N}}_*.py plot
+
+# write the figures to PNGs instead of opening windows
+save-plots N dir="figures":
+    @NN_PLOT_SAVE={{dir}} uv run 0{{N}}_*.py plot
