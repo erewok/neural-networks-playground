@@ -1,8 +1,10 @@
 # neural-networks-study
 
-Here I am learning how neural networks actually work, by fixing broken ones that Claude made for me.
+Here I am learning how neural networks work, by fixing broken ones that Claude made for me.
 
-This is meant to be anything useful to anyone else, but if it's helpful...¯\_(ツ)_/¯
+My goals here are **extremely modest**: I just want to grasp basic concepts I never understood before.
+
+This is not intended to be anything useful to anyone else, but maybe someone will find it useful...¯\_(ツ)_/¯
 
 ## The idea
 
