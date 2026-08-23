@@ -1,43 +1,44 @@
 """
 Stage 2: the perceptron -- the neuron from 01, plus a learning rule.
 
-The forward pass here is its own copy, and it is correct, so you can work on
-this file independently of 01.
+The forward pass here is its own correct copy, so this file stands alone.
 
 The only new idea: when the neuron gets an answer wrong, nudge the weights so
-that next time it would be less wrong. Do that over and over and the weights
-drift into a shape that gets everything right.
+that next time it would be less wrong. Repeat until it stops being wrong.
 
-HOW THIS FILE IS LAID OUT
-  PerceptronBase   the parts that are not in question: the forward pass, and
-                   the training loop that walks the examples epoch by epoch.
-  Original         the existing rule, left untouched to compare against.
-  Yours            one method to write: update().
+That nudge breaks into three small decisions, and each one is its own function
+to fix:
 
-  Everything hinges on that one method. It is handed a single example, applies
-  whatever change it thinks is warranted, and returns True if the neuron got
-  that example wrong. The loop around it is already correct, and the `mistakes`
-  counter it prints does nothing but add up those return values, so it is an
-  honest signal.
+    error()           how wrong were we, and in which direction?
+    updated_weight()  given that, where should one weight move to?
+    updated_bias()    given that, where should the bias move to?
 
-Properties the learning rule is supposed to have:
+Properties they are supposed to have. Each is visible in the tables below.
 
-  1. It must move toward the right answer, not away from it. If the neuron said
-     0 when it should have said 1, the evidence it saw should end up counting
-     for MORE afterward, not less.
+  1. The correction has to point at the answer, not away from it. If the neuron
+     said 0 when it should have said 1, whatever happens next must make firing
+     MORE likely the next time it sees that input, not less.
 
-  2. Only weights that were actually responsible for the mistake should change.
-     If an input was switched off, it did not contribute to the error, so its
-     weight has no business moving. (This is called credit assignment, and it
-     is the same idea that backpropagation generalizes to many layers.)
+  2. A weight only moves if its own input had something to do with the mistake.
+     An input that was switched off contributed nothing and its weight must come
+     back unchanged. An input twice as large should pull its weight twice as far.
+     (This is credit assignment, the idea backpropagation later generalizes to
+     many layers.)
 
-  3. The bias has to learn too. It is the neuron's threshold; if it never moves,
-     the neuron is stuck with whatever threshold it happened to start with.
+  3. The bias moves on every mistake. It is the neuron's threshold, and a neuron
+     that cannot move its threshold is stuck wherever it started.
 
-One thing worth knowing before you start, so you don't chase it: a single
-neuron genuinely cannot learn XOR. That is a real mathematical limit, not a
-defect in this file. AND and OR converging while XOR never does is the correct
-end state here, and it is the reason 03 exists.
+  4. When there is no error, nothing moves at all. A converged neuron has to
+     stay converged.
+
+The last section wires your three functions into a real training loop, so you
+can see arithmetic that passes the tables turn into a neuron that actually
+learns. Both parts run automatically.
+
+One thing worth knowing so you don't chase it: a single neuron genuinely cannot
+learn XOR. That is a real mathematical limit, not a defect in this file. AND and
+OR converging while XOR never does is the correct end state, and it is why 03
+exists.
 """
 
 
@@ -52,129 +53,188 @@ def step(z):
     return 1 if z > 0 else 0
 
 
-# ------------------------------------------------------------ shared machinery
+# --------------------------------------------------------------- the originals
+# Left here on purpose. Don't edit these -- the harness runs them beside yours.
 
 
-class PerceptronBase:
-    def __init__(self, n_inputs, rate=0.1):
-        # Starting from all zeros is fine for a single perceptron.
-        self.weights = [0.0] * n_inputs
-        self.bias = 0.0
-        self.rate = rate
-
-    def predict(self, inputs):
-        return step(weighted_sum(inputs, self.weights, self.bias))
-
-    def update(self, inputs, target):
-        """Learn from ONE example. Return True if the neuron got it wrong."""
-        raise NotImplementedError
-
-    def train(self, examples, epochs=20, verbose=True):
-        """examples: list of (inputs, target). This loop is correct."""
-        for epoch in range(epochs):
-            mistakes = 0
-            for inputs, target in examples:
-                if self.update(inputs, target):
-                    mistakes += 1
-            if verbose:
-                w = ", ".join(f"{v:+.1f}" for v in self.weights)
-                print(f"  epoch {epoch:2d}  mistakes={mistakes}  w=[{w}]  b={self.bias:+.1f}")
-            if mistakes == 0:
-                if verbose:
-                    print("  converged -- no mistakes left, weights stop moving")
-                return True
-        if verbose:
-            print("  gave up: still making mistakes after all epochs")
-        return False
+def error_broken(target, prediction):
+    return prediction - target
 
 
-# ---------------------------------------------------------------- the original
-# Left here on purpose. Don't edit it -- it is what you are comparing against.
+def updated_weight_broken(w, x, err, rate):
+    return w + rate * err
 
 
-class Original(PerceptronBase):
-    def update(self, inputs, target):
-        error = self.predict(inputs) - target
-        if error == 0:
-            return False
-        for i, x in enumerate(inputs):
-            self.weights[i] += self.rate * error
-        return True
+def updated_bias_broken(b, err, rate):
+    return b
 
 
 # ---------------------------------------------------------------------- yours
+# Write these three. Each one is a single expression. The tables score whichever
+# ones you have written and leave the rest blank, so you can go one at a time.
 
 
-class Yours(PerceptronBase):
-    def update(self, inputs, target):
-        """Learn from ONE example. Return True if the neuron got it wrong.
-
-        You have self.weights, self.bias, self.rate, and self.predict(inputs).
-        """
-        raise NotImplementedError
+def error(target, prediction):
+    """How wrong were we, and in which direction?"""
+    raise NotImplementedError
 
 
-def ready():
+def updated_weight(w, x, err, rate):
+    """Where should the weight on input x move to?"""
+    raise NotImplementedError
+
+
+def updated_bias(b, err, rate):
+    """Where should the bias move to?"""
+    raise NotImplementedError
+
+
+# ---------------------------------------------------------------- test harness
+
+
+def is_written(fn, probe_args):
     try:
-        Yours(2).update((0, 0), 0)
+        fn(*probe_args)
     except NotImplementedError:
         return False
     return True
 
 
-# ------------------------------------------------------------------ the tasks
+def close(a, b):
+    return abs(a - b) < 1e-9
+
+
+def table(name, original, mine, argnames, cases, note=""):
+    """cases: list of (args_tuple, expected)."""
+    written = is_written(mine, cases[0][0])
+    sig = ", ".join(argnames)
+    print(f"\n{name}({sig})")
+    if note:
+        print(f"  ({note})")
+    ok_orig = ok_mine = 0
+    for args, want in cases:
+        shown = ", ".join(f"{n}={v:g}" for n, v in zip(argnames, args))
+        go = original(*args)
+        ho = close(go, want)
+        ok_orig += ho
+        line = f"  {shown:<34} want {want:+.2f} | original {go:+.2f} {'ok   ' if ho else 'WRONG'}"
+        if written:
+            gm = mine(*args)
+            hm = close(gm, want)
+            ok_mine += hm
+            line += f" | yours {gm:+.2f} {'ok   ' if hm else 'WRONG'}"
+        else:
+            line += " | yours --"
+        print(line)
+    tail = f"  --> original {ok_orig}/{len(cases)}"
+    if written:
+        tail += f"   yours {ok_mine}/{len(cases)}"
+    print(tail)
+    return (ok_orig, ok_mine if written else None, len(cases))
+
+
+# ------------------------------------------------------- the integration test
+# Your three functions, dropped into a real training loop.
+
+
+class Perceptron:
+    def __init__(self, n_inputs, err_fn, w_fn, b_fn, rate=0.1):
+        self.weights = [0.0] * n_inputs
+        self.bias = 0.0
+        self.rate = rate
+        self.err_fn, self.w_fn, self.b_fn = err_fn, w_fn, b_fn
+
+    def predict(self, inputs):
+        return step(weighted_sum(inputs, self.weights, self.bias))
+
+    def train(self, examples, epochs=30):
+        for _ in range(epochs):
+            mistakes = 0
+            for inputs, target in examples:
+                err = self.err_fn(target, self.predict(inputs))
+                if err == 0:
+                    continue
+                mistakes += 1
+                self.weights = [self.w_fn(w, x, err, self.rate)
+                                for w, x in zip(self.weights, inputs)]
+                self.bias = self.b_fn(self.bias, err, self.rate)
+            if mistakes == 0:
+                return True
+        return False
+
+    def solves(self, examples):
+        return all(self.predict(x) == t for x, t in examples)
 
 
 AND = [((0, 0), 0), ((0, 1), 0), ((1, 0), 0), ((1, 1), 1)]
 OR  = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 1)]
 XOR = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
 
-TASKS = [("AND", AND), ("OR", OR), ("XOR", XOR)]
-
-# XOR is here to fail. Everything else should end up solved.
-SHOULD_SOLVE = {"AND": True, "OR": True, "XOR": False}
+TASKS = [("AND", AND, True), ("OR", OR, True), ("XOR", XOR, False)]
 
 
-def report(p, examples):
-    ok = True
-    for inputs, target in examples:
-        got = p.predict(inputs)
-        hit = got == target
-        ok = ok and hit
-        print(f"    x={inputs} want={target} got={got}  {'ok ' if hit else 'WRONG'}")
-    return ok
-
-
-def run(cls, label):
-    print(f"\n{'=' * 60}\n{label}\n{'=' * 60}")
-    outcomes = {}
-    for name, data in TASKS:
-        print(f"\ntraining on {name}:")
-        p = cls(n_inputs=2)
+def train_all(label, err_fn, w_fn, b_fn):
+    print(f"\n{label}")
+    good = True
+    for name, data, should in TASKS:
+        p = Perceptron(2, err_fn, w_fn, b_fn)
         p.train(data)
-        print(f"  {name} result:")
-        outcomes[name] = report(p, data)
-    return outcomes
-
-
-def verdict(outcomes):
-    print("\n  scorecard:")
-    for name, _ in TASKS:
-        want = SHOULD_SOLVE[name]
-        got = outcomes[name]
-        state = "solved" if got else "not solved"
-        expect = "should solve" if want else "cannot be solved by one neuron"
-        flag = "as expected" if got == want else ">>> not what we want"
-        print(f"    {name:<4} {state:<11} ({expect})  {flag}")
-    return all(outcomes[n] == SHOULD_SOLVE[n] for n, _ in TASKS)
+        solved = p.solves(data)
+        good = good and (solved == should)
+        note = "should solve" if should else "one neuron cannot solve this"
+        flag = "as expected" if solved == should else ">>> not what we want"
+        w = ", ".join(f"{v:+.1f}" for v in p.weights)
+        state = "solved    " if solved else "not solved"
+        print(f"  {name:<4} {state}  w=[{w}] b={p.bias:+.1f}   ({note})  {flag}")
+    return good
 
 
 if __name__ == "__main__":
-    verdict(run(Original, "ORIGINAL"))
+    results = []
 
-    if ready():
-        good = verdict(run(Yours, "YOURS"))
-        if good:
-            print("\n  AND and OR solved, XOR correctly not solved.")
+    results.append(table(
+        "error", error_broken, error, ["target", "prediction"],
+        [((1, 0), +1.0), ((0, 1), -1.0), ((1, 1), 0.0), ((0, 0), 0.0)],
+        "we wanted `target`, the neuron said `prediction`"))
+
+    results.append(table(
+        "updated_weight", updated_weight_broken, updated_weight,
+        ["w", "x", "err", "rate"],
+        [
+            ((0.0, 1, +1.0, 0.1), +0.10),   # input on, we fired too little
+            ((0.0, 0, +1.0, 0.1), +0.00),   # input off -- not this weight's fault
+            ((0.5, 1, -1.0, 0.1), +0.40),   # input on, we fired too much
+            ((0.5, 0, -1.0, 0.1), +0.50),   # input off again
+            ((0.2, 2.0, +1.0, 0.1), +0.40),  # twice the input, twice the move
+            ((0.2, 1, 0.0, 0.1), +0.20),    # no error, no movement
+        ],
+        "w is the current weight on input x; err came from error()"))
+
+    results.append(table(
+        "updated_bias", updated_bias_broken, updated_bias, ["b", "err", "rate"],
+        [
+            ((0.0, +1.0, 0.1), +0.10),
+            ((0.0, -1.0, 0.1), -0.10),
+            ((0.3, +1.0, 0.1), +0.40),
+            ((0.3, 0.0, 0.1), +0.30),
+        ],
+        "the bias has no input of its own to be scaled by"))
+
+    total = sum(n for _, _, n in results)
+    ob = sum(o for o, _, _ in results)
+    print(f"\n{'=' * 74}")
+    print(f"ORIGINAL: {ob}/{total} rows correct, {total - ob} failing")
+    if all(m is not None for _, m, _ in results):
+        om = sum(m for _, m, _ in results)
+        print(f"YOURS:    {om}/{total} rows correct, {total - om} failing")
     else:
-        print(f"\n{'=' * 60}\nYOURS: not written yet -- see Yours.update()\n{'=' * 60}")
+        print("YOURS:    not written yet")
+
+    print(f"\n{'=' * 74}\nwired into a training loop\n{'=' * 74}")
+    train_all("with the originals:", error_broken, updated_weight_broken,
+              updated_bias_broken)
+    if all(m is not None for _, m, _ in results):
+        if train_all("with yours:", error, updated_weight, updated_bias):
+            print("\n  AND and OR learned, XOR correctly not learned.")
+    else:
+        print("\nwith yours: not written yet")
