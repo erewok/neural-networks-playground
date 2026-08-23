@@ -61,6 +61,9 @@ import math
 import random
 import sys
 
+from harness import (TICK, Cell, ExerciseTable, approx, console, fmt_float,
+                     not_written, prediction_row, section, summary)
+
 
 def sigmoid(z):
     if z < -60:
@@ -118,6 +121,7 @@ def updated_weight(w, delta, incoming, rate):
 
 
 # ---------------------------------------------------------------- test harness
+# Drawing only -- see harness.py. Nothing here needs fixing.
 
 
 def is_written(fn, probe_args):
@@ -128,31 +132,23 @@ def is_written(fn, probe_args):
     return True
 
 
-def table(name, original, mine, argnames, cases, note=""):
+def compare(title, original, mine, argnames, cases, note=""):
+    """cases: list of (args_tuple, expected, why)."""
     written = is_written(mine, cases[0][0])
-    print(f"\n{name}({', '.join(argnames)})")
-    if note:
-        print(f"  ({note})")
-    ok_o = ok_m = 0
+    t = ExerciseTable(
+        title=title,
+        note=note,
+        input_header="arguments",
+        why_header="what this row is showing",
+        yours_written=written,
+        fmt=fmt_float(6),
+        compare=approx,
+    )
     for args, want, why in cases:
-        shown = ", ".join(f"{n}={v:g}" for n, v in zip(argnames, args))
-        go = original(*args)
-        ho = abs(go - want) < 1e-6
-        ok_o += ho
-        line = f"  {shown:<36} want {want:+.6f} | orig {go:+.6f} {'ok   ' if ho else 'WRONG'}"
-        if written:
-            gm = mine(*args)
-            hm = abs(gm - want) < 1e-6
-            ok_m += hm
-            line += f" | yours {gm:+.6f} {'ok   ' if hm else 'WRONG'}"
-        else:
-            line += " | yours --"
-        print(line + f"   {why}")
-    tail = f"  --> original {ok_o}/{len(cases)}"
-    if written:
-        tail += f"   yours {ok_m}/{len(cases)}"
-    print(tail)
-    return (ok_o, ok_m if written else None, len(cases))
+        label = ", ".join(f"{n}={v:g}" for n, v in zip(argnames, args))
+        t.add(label, want, Cell(original(*args)),
+              Cell(mine(*args)) if written else None, why=why)
+    return t.render()
 
 
 # ------------------------------------------------------- the integration test
@@ -229,86 +225,93 @@ XOR = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
 
 
 def run_xor(label, out_fn, hid_fn, w_fn):
-    print(f"\n{label}")
+    console.print(f"\n[bold]{label}[/bold]")
     net = Network(out_fn, hid_fn, w_fn)
     before = [f"{v:+.3f}" for row in net.w_hidden for v in row]
     loss = net.train(XOR)
     after = [f"{v:+.3f}" for row in net.w_hidden for v in row]
-    print(f"  final loss {loss:.4f}   (0.25 is what guessing scores)")
-    print(f"  hidden weights before  [{', '.join(before)}]")
-    print(f"  hidden weights after   [{', '.join(after)}]")
+
+    moved = before != after
+    console.print(f"  final loss [bold]{loss:.4f}[/bold]"
+                  f"   [dim](0.25 is what guessing scores)[/dim]")
+    console.print(f"  [dim]hidden weights before[/dim]  [cyan]{', '.join(before)}[/cyan]")
+    console.print(f"  [dim]hidden weights after [/dim]  "
+                  f"[{'cyan' if moved else 'yellow'}]{', '.join(after)}[/]")
+    if not moved:
+        console.print("  [yellow]^ identical to before -- the hidden layer "
+                      "never learned anything[/yellow]")
     for x, t in XOR:
         y = net.predict(x)
-        print(f"    x={x} want={t}  got={y:.3f} -> {round(y)}  "
-              f"{'ok ' if round(y) == t else 'WRONG'}")
-    print(f"  {'XOR SOLVED' if net.solves(XOR) else 'not solved'}")
-    return net.solves(XOR)
+        prediction_row(x, t, round(y), raw=y)
+    solved = net.solves(XOR)
+    console.print(f"  [bold green]{TICK} XOR SOLVED[/bold green]" if solved
+                  else "  [yellow]not solved[/yellow]")
+    return solved
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "handwired":
+        section("XOR by hand -- no training at all")
         net = Network(output_delta_broken, hidden_delta_broken,
                       updated_weight_broken, n_hidden=2).hand_wire()
-        print("weights set by hand, no training at all:")
         for x, t in XOR:
             y = net.predict(x)
-            print(f"  x={x} want={t}  got={y:.3f} -> {round(y)}  "
-                  f"{'ok ' if round(y) == t else 'WRONG'}")
-        print(f"  {'XOR SOLVED' if net.solves(XOR) else 'not solved'}")
+            prediction_row(x, t, round(y), raw=y)
+        console.print(f"  [bold green]{TICK} XOR SOLVED[/bold green]"
+                      if net.solves(XOR) else "  [yellow]not solved[/yellow]")
+        console.print("\n[dim italic]The shape of this network can hold the "
+                      "answer. Finding it by training is the other problem.[/dim italic]")
         sys.exit(0)
 
+    section("backpropagation, one function at a time")
     results = []
 
-    results.append(table(
-        "output_delta", output_delta_broken, output_delta, ["y", "target"],
+    results.append(compare(
+        "output_delta(y, target)", output_delta_broken, output_delta,
+        ["y", "target"],
         [
-            ((0.5, 1), -0.12500, "unsure and should have fired"),
-            ((0.5, 0), +0.12500, "unsure and should not have"),
-            ((0.9, 1), -0.00900, "nearly right already, small move"),
-            ((0.1, 0), +0.00900, "nearly right the other way"),
+            ((0.5, 1), -0.125000, "unsure and should have fired"),
+            ((0.5, 0), +0.125000, "unsure and should not have"),
+            ((0.9, 1), -0.009000, "nearly right already, small move"),
+            ((0.1, 0), +0.009000, "nearly right the other way"),
             ((0.99, 0), +0.009801, "badly wrong but saturated -- barely moves"),
-            ((0.5, 0.5), 0.00000, "no error at all"),
+            ((0.5, 0.5), 0.000000, "no error at all"),
         ],
         "y is what the output unit produced"))
 
-    results.append(table(
-        "hidden_delta", hidden_delta_broken, hidden_delta,
+    results.append(compare(
+        "hidden_delta(h, w_out, out_delta)", hidden_delta_broken, hidden_delta,
         ["h", "w_out", "out_delta"],
         [
-            ((0.5, 1.0, 0.2), +0.05000, "ordinary case"),
-            ((0.5, 0.0, 0.2), +0.00000, "not connected -- not its fault"),
-            ((0.5, -1.0, 0.2), -0.05000, "negative connection, opposite blame"),
-            ((0.5, 2.0, 0.2), +0.10000, "twice connected, twice the blame"),
-            ((0.99, 1.0, 0.2), +0.00198, "saturated -- barely moves"),
-            ((0.5, 1.0, 0.0), +0.00000, "nothing went wrong downstream"),
+            ((0.5, 1.0, 0.2), +0.050000, "ordinary case"),
+            ((0.5, 0.0, 0.2), +0.000000, "not connected -- not its fault"),
+            ((0.5, -1.0, 0.2), -0.050000, "negative connection, opposite blame"),
+            ((0.5, 2.0, 0.2), +0.100000, "twice connected, twice the blame"),
+            ((0.99, 1.0, 0.2), +0.001980, "saturated -- barely moves"),
+            ((0.5, 1.0, 0.0), +0.000000, "nothing went wrong downstream"),
         ],
         "this unit produced h and sent it along w_out to a unit whose delta is out_delta"))
 
-    results.append(table(
-        "updated_weight", updated_weight_broken, updated_weight,
-        ["w", "delta", "incoming", "rate"],
+    results.append(compare(
+        "updated_weight(w, delta, incoming, rate)", updated_weight_broken,
+        updated_weight, ["w", "delta", "incoming", "rate"],
         [
-            ((0.0, 0.5, 1.0, 0.5), -0.25000, "move against the delta"),
-            ((0.0, 0.5, 0.0, 0.5), +0.00000, "nothing arrived, nothing moves"),
-            ((0.4, -0.2, 1.0, 0.5), +0.50000, "negative delta pushes the other way"),
-            ((0.4, 0.5, 2.0, 0.5), -0.10000, "twice the input, twice the move"),
-            ((0.4, 0.0, 1.0, 0.5), +0.40000, "no delta, no move"),
+            ((0.0, 0.5, 1.0, 0.5), -0.250000, "move against the delta"),
+            ((0.0, 0.5, 0.0, 0.5), +0.000000, "nothing arrived, nothing moves"),
+            ((0.4, -0.2, 1.0, 0.5), +0.500000, "negative delta pushes the other way"),
+            ((0.4, 0.5, 2.0, 0.5), -0.100000, "twice the input, twice the move"),
+            ((0.4, 0.0, 1.0, 0.5), +0.400000, "no delta, no move"),
         ],
         "delta belongs to the unit this weight feeds into"))
 
-    total = sum(n for _, _, n in results)
-    ob = sum(o for o, _, _ in results)
-    done = all(m is not None for _, m, _ in results)
-    print(f"\n{'=' * 74}")
-    print(f"ORIGINAL: {ob}/{total} rows correct, {total - ob} failing")
-    print(f"YOURS:    {sum(m for _, m, _ in results)}/{total} rows correct" if done
-          else "YOURS:    not written yet")
+    summary(results)
 
-    print(f"\n{'=' * 74}\nwired into a real network, trained on XOR\n{'=' * 74}")
-    run_xor("with the originals:", output_delta_broken, hidden_delta_broken,
+    section("those same functions, wired into a network, trained on XOR")
+    run_xor("with the originals", output_delta_broken, hidden_delta_broken,
             updated_weight_broken)
-    if done:
-        if run_xor("with yours:", output_delta, hidden_delta, updated_weight):
-            print("\n  Two layers, and the thing one neuron could never do is done.")
+    if all(m is not None for _, m, _ in results):
+        if run_xor("with yours", output_delta, hidden_delta, updated_weight):
+            console.print("\n  [bold green]Two layers, and the thing one neuron "
+                          "could never do is done.[/bold green]")
     else:
-        print("\nwith yours: not written yet")
+        not_written("with yours")

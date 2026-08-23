@@ -12,17 +12,25 @@ Each file is deliberately broken or half-built. I am going for "productive feail
 
 Also, I am putting my solutions into a branch where I can go back to them.
 
+## How To Run
+
+I run them like this:
+
+```sh
+just run 1
+
+```
+
+Can also do:
+
+```sh
+just run all
+
+```
+
 ## Who Wrote This Crap
 
 I asked Claude to write these for me and I complained about them not being broken enough until the act of fixing them made the stuff start making more sense to me.
-
-## Running
-
-    just run 1
-    just run 2
-    just run 3
-    just run 3 handwired    # extra args pass through
-    just all
 
 ## Files
 

@@ -1,11 +1,6 @@
 # My shit
-analyses.db
-notes/
-reports/
 out/
-portfolio.toml
-docs/tdd/
-docs/ux/
+.#*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

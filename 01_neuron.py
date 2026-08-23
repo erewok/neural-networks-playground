@@ -39,6 +39,8 @@ wrong, so read the whole table, not just the bad rows.
 
 from itertools import product
 
+from harness import Cell, ExerciseTable, exact, fmt_int, section, summary
+
 
 # --------------------------------------------------------------- the originals
 # Left here on purpose. Don't edit these -- they are the thing you are comparing
@@ -74,6 +76,7 @@ def step(z):
 
 
 # ---------------------------------------------------------------- test harness
+# Drawing only -- see harness.py. Nothing here needs fixing.
 
 
 def ready():
@@ -87,83 +90,78 @@ def ready():
     return True
 
 
-def table(name, weights, bias, cases, note=""):
+def gate(name, weights, bias, cases, note=""):
     """cases: list of (inputs, expected_output)."""
     mine = ready()
-    print(f"\n{name}   weights={weights}  bias={bias}")
-    if note:
-        print(f"  ({note})")
-    ok_broken = ok_mine = 0
+    t = ExerciseTable(
+        title=f"{name}    weights={weights}  bias={bias}",
+        note=note,
+        input_header="x",
+        yours_written=mine,
+        fmt=fmt_int,
+        compare=exact,
+    )
     for x, want in cases:
-        xs = "(" + ", ".join(f"{v:g}" for v in x) + ")"
         zb = weighted_sum_broken(x, weights, bias)
-        gb = step_broken(zb)
-        hb = gb == want
-        ok_broken += hb
-        line = f"  x={xs:<14} want={want} | original z={zb:6.1f} -> {gb} {'ok   ' if hb else 'WRONG'}"
+        original = Cell(step_broken(zb), detail=f"z={zb:+.2f}")
+        yours = None
         if mine:
             zm = weighted_sum(x, weights, bias)
-            gm = step(zm)
-            hm = gm == want
-            ok_mine += hm
-            line += f" | yours z={zm:6.1f} -> {gm} {'ok   ' if hm else 'WRONG'}"
-        else:
-            line += " | yours --"
-        print(line)
-    tail = f"  --> original {ok_broken}/{len(cases)}"
-    if mine:
-        tail += f"   yours {ok_mine}/{len(cases)}"
-    print(tail)
-    return (ok_broken, ok_mine, len(cases))
+            yours = Cell(step(zm), detail=f"z={zm:+.2f}")
+        label = "(" + ", ".join(f"{v:g}" for v in x) + ")"
+        t.add(label, want, original, yours)
+    return t.render()
 
 
-def binary(n):
+def bits(n):
     """All 0/1 combinations of n inputs, in counting order."""
     return list(product([0, 1], repeat=n))
 
 
-def gate(expected_bits, n=2):
-    return list(zip(binary(n), expected_bits))
+def truth(expected_bits, n=2):
+    return list(zip(bits(n), expected_bits))
 
 
 if __name__ == "__main__":
+    section("one neuron, forward pass only")
     results = []
 
     # --- two-input logic gates, all weights positive ---------------------
-    results.append(table(
-        "AND", [1.0, 1.0], -1.5, gate([0, 0, 0, 1]),
+    results.append(gate(
+        "AND", [1.0, 1.0], -1.5, truth([0, 0, 0, 1]),
         "each input is worth 1 point; you need more than 1.5 points to fire"))
 
-    results.append(table(
-        "OR", [1.0, 1.0], -0.5, gate([0, 1, 1, 1]),
+    results.append(gate(
+        "OR", [1.0, 1.0], -0.5, truth([0, 1, 1, 1]),
         "each input is worth 1 point; you need more than 0.5 points"))
 
     # --- asymmetric weights: does each input reach its own weight? -------
-    results.append(table(
-        "PASS-THROUGH x1", [1.0, 0.0], -0.5, gate([0, 0, 1, 1]),
+    results.append(gate(
+        "PASS-THROUGH x1", [1.0, 0.0], -0.5, truth([0, 0, 1, 1]),
         "only x1 counts; x2 is weighted zero and should be ignored entirely"))
 
     # --- negative weights: can this neuron vote against itself? ----------
-    results.append(table(
-        "NOT x1", [-1.0, 0.0], 0.5, gate([1, 1, 0, 0]),
+    results.append(gate(
+        "NOT x1", [-1.0, 0.0], 0.5, truth([1, 1, 0, 0]),
         "fires by default; x1 being on should push it back down"))
 
-    results.append(table(
-        "NAND", [-1.0, -1.0], 1.5, gate([1, 1, 1, 0]),
+    results.append(gate(
+        "NAND", [-1.0, -1.0], 1.5, truth([1, 1, 1, 0]),
         "fires unless both inputs are on"))
 
-    results.append(table(
-        "x1 AND NOT x2", [1.0, -1.0], -0.5, gate([0, 0, 1, 0]),
+    results.append(gate(
+        "x1 AND NOT x2", [1.0, -1.0], -0.5, truth([0, 0, 1, 0]),
         "mixed signs: x1 argues for firing, x2 argues against"))
 
     # --- three inputs with unequal weights -------------------------------
-    results.append(table(
-        "WEIGHTED VOTE", [3.0, 2.0, 1.0], -3.5, gate([0, 0, 0, 0, 0, 1, 1, 1], n=3),
+    results.append(gate(
+        "WEIGHTED VOTE", [3.0, 2.0, 1.0], -3.5,
+        truth([0, 0, 0, 0, 0, 1, 1, 1], n=3),
         "x1 is worth 3 points, x2 is worth 2, x3 is worth 1; you need 3.5+"))
 
     # --- inputs that are not 0/1 -----------------------------------------
     # Nothing says inputs have to be binary. Real ones rarely are.
-    results.append(table(
+    results.append(gate(
         "REAL-VALUED", [2.0, -1.0], -1.0, [
             ((1.0, 0.0), 1),
             ((0.5, 0.0), 0),
@@ -174,14 +172,4 @@ if __name__ == "__main__":
         ],
         "x1 helps twice as much as x2 hurts; a negative input flips its own sign"))
 
-    total = sum(n for _, _, n in results)
-    ob = sum(b for b, _, _ in results)
-    om = sum(m for _, m, _ in results)
-    print(f"\n{'=' * 72}")
-    print(f"ORIGINAL: {ob}/{total} rows correct, {total - ob} failing")
-    if ready():
-        print(f"YOURS:    {om}/{total} rows correct, {total - om} failing")
-        if om == total:
-            print("all rows correct")
-    else:
-        print("YOURS:    not written yet")
+    summary(results)

@@ -1,10 +1,18 @@
 _default:
     @just --list
 
-# run one exercise by number, e.g. `just run 1` (extra args pass through)
+# run one exercise by number, e.g. `just run 1`. `just run all` runs every one.
 run N *ARGS:
-    @uv run 0{{N}}_*.py {{ARGS}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{N}}" = "all" ]; then
+        for f in 0*_*.py; do
+            printf '\n\033[1;36m=== %s ===\033[0m\n' "$f"
+            uv run "$f"
+        done
+    else
+        uv run 0{{N}}_*.py {{ARGS}}
+    fi
 
-# run all of them
-all:
-    @for f in 0*_*.py; do echo "=== $f ==="; uv run "$f"; echo; done
+# same as `just run all`
+all: (run "all")
