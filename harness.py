@@ -36,6 +36,55 @@ def exact(a: Any, b: Any) -> bool:
     return a == b
 
 
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def approx_nested(a: Any, b: Any, tol: float = 1e-6) -> bool:
+    """approx(), but for vectors and matrices too.
+
+    A wrong SHAPE is an ordinary failing row rather than a crash, which matters
+    from chapter 2 onwards: getting the shape wrong is the most common way to
+    get one of these functions wrong, so it has to be visible in the table.
+    """
+    if _is_number(a) and _is_number(b):
+        return abs(a - b) < tol
+    if _is_number(a) or _is_number(b) or a is None or b is None:
+        return False
+    try:
+        if len(a) != len(b):
+            return False
+    except TypeError:
+        return False
+    return all(approx_nested(x, y, tol) for x, y in zip(a, b))
+
+
+def fmt_grid(places: int = 2, signed: bool = True) -> Callable[[Any], str]:
+    """Render a scalar, a vector or a matrix small enough to sit in a cell.
+
+    Matrices come out as [row | row], because a whole grid of numbers has to
+    fit in a column beside three other columns of them. Pass signed=False for
+    small whole numbers, where a column of leading + signs is just noise.
+    """
+    def one(v: Any) -> str:
+        return f"{float(v):+.{places}f}" if signed else f"{float(v):g}"
+
+    def render(v: Any) -> str:
+        if v is None:
+            return "raised"
+        if _is_number(v):
+            return one(v)
+        try:
+            rows = list(v)
+        except TypeError:
+            return str(v)
+        if rows and not _is_number(rows[0]):
+            return "[" + " | ".join(" ".join(one(x) for x in row)
+                                    for row in rows) + "]"
+        return "[" + " ".join(one(x) for x in rows) + "]"
+    return render
+
+
 def fmt_int(v: Any) -> str:
     return str(int(v))
 

@@ -548,6 +548,90 @@ def inference_figure(train_pts, holdout, w, b, predict_fn):
     return fig
 
 
+# ------------------------------------------------------------------ exercise 5
+
+
+def _cells(ax, M, hl_row=None, hl_col=None, hl_cell=None, rows_max=None):
+    """Draw a matrix as a grid of numbers, tinting the parts under discussion."""
+    from matplotlib.patches import Rectangle
+
+    n, m = len(M), len(M[0])
+    for i in range(n):
+        for j in range(m):
+            contributes = (hl_row is not None and i == hl_row) or \
+                          (hl_col is not None and j == hl_col)
+            answer = hl_cell is not None and (i, j) == hl_cell
+            face = ACCENT if answer else (FIRES if contributes else SURFACE)
+            ax.add_patch(Rectangle((j, i), 1, 1, facecolor=face,
+                                   alpha=0.22 if (contributes or answer) else 1.0,
+                                   edgecolor=GRID, linewidth=1.2, zorder=1))
+            if answer or contributes:
+                ax.add_patch(Rectangle((j, i), 1, 1, facecolor="none",
+                                       edgecolor=ACCENT if answer else FIRES,
+                                       linewidth=2.2, zorder=3))
+            ax.text(j + 0.5, i + 0.5, f"{M[i][j]:g}", ha="center", va="center",
+                    fontsize=13, color=INK, zorder=4,
+                    fontweight="bold" if (answer or contributes) else "normal")
+    ax.set_xlim(-0.15, m + 0.15)
+    # A shared vertical extent so panels of different heights top-align and
+    # their titles sit on one line.
+    ax.set_ylim((rows_max or n) + 0.15, -0.15)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+
+def matmul_figure(matmul_fn, transpose_fn):
+    """Where ONE number in a matrix product comes from.
+
+    The wrong idea this figure exists to kill is that matmul multiplies numbers
+    that sit in the same place. It does not: one number in the answer draws on
+    a whole row and a whole column.
+    """
+    theme()
+    A = [[1, 2, 3], [4, 5, 6]]
+    B = [[1, 0], [0, 1], [2, -1]]
+    C = matmul_fn(A, B)
+    i, j = 1, 0                       # the answer cell being explained
+
+    fig = figure(figsize=(13.6, 4.6))
+    specs = [
+        (1, "A", A, dict(hl_row=i)),
+        (2, "@   B", B, dict(hl_col=j)),
+        (3, "=   A @ B", C, dict(hl_cell=(i, j))),
+    ]
+    tallest = max(len(M) for _, _, M, _ in specs)
+    for pos, label, M, kw in specs:
+        ax = fig.add_subplot(1, 4, pos)
+        _cells(ax, M, rows_max=tallest, **kw)
+        title(ax, f"{label}", f"{len(M)} x {len(M[0])}")
+
+    terms = " + ".join(f"{A[i][k]}x{B[k][j]}" for k in range(len(B)))
+    ax = fig.add_subplot(1, 4, 4)
+    ax.axis("off")
+    ax.text(0, 0.97,
+            "The one green number was made by\n"
+            "the whole blue row and the whole\n"
+            "blue column, paired off and added:\n\n"
+            f"   {terms}  =  {C[i][j]}\n\n"
+            "That is a dot product, and every\n"
+            "number in the answer is another one.\n\n"
+            "NOT elementwise. Nothing here\n"
+            "multiplied the two numbers sitting\n"
+            "in the same position.\n\n"
+            "SHAPES\n"
+            f"   ({len(A)} x {len(A[0])}) @ ({len(B)} x {len(B[0])})"
+            f"  ->  ({len(C)} x {len(C[0])})\n\n"
+            f"   the inner {len(B)}s had to match,\n"
+            "   and then they vanished.",
+            va="top", fontsize=10.5, color=INK, linespacing=1.55, family="monospace")
+
+    fig.suptitle("One number in a matrix product",
+                 x=0.02, y=0.99, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.tight_layout(rect=[0, 0, 1, 0.92])
+    return fig
+
+
 # ------------------------------------------------------------------ exercise 3
 
 
