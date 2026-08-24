@@ -233,96 +233,151 @@ def neuron_surface_figure(name, weights, bias, cases, ws_fn, step_fn):
     return fig
 
 
-def boundary_family_figure(families, boundary_fn):
-    """Every gate at once, on ONE set of axes.
+XOR_CASES = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
 
-    The old figure put five gates in five panels and asked you to compare them
-    from memory. Overlaid, the two claims in the caption are single glances:
-    lines sharing a colour share their weights, and they are parallel.
+# The closest a single straight fence gets to XOR: OR's neuron, right about
+# three corners out of four. Hardcoded so both XOR panels draw with none of
+# the exercise's functions written.
+_XOR_TRY = ((1.0, 1.0), -0.5)
+
+
+def _regions(ax, gx, gy, fired):
+    """Paint the two half-planes. The fence is wherever they meet."""
+    ax.contourf(gx, gy, fired, levels=[-0.5, 0.5, 1.5],
+                colors=[QUIET, FIRES], alpha=0.16)
+
+
+def _gate_panel(ax, label, weights, bias, cases, note, boundary_fn, ws_fn,
+                step_fn, lo, hi):
+    """One gate: the two regions, the fence between them, the four corners.
+
+    The regions come from the neuron itself, the fence comes from your
+    boundary function, and they are drawn on top of each other on purpose --
+    if your fence is not where the colours change, that is the bug, visible.
+    """
+    gx, gy = np.meshgrid(np.linspace(lo, hi, 200), np.linspace(lo, hi, 200))
+    fired = np.array([[step_fn(ws_fn((a, b), weights, bias))
+                       for a, b in zip(rx, ry)]
+                      for rx, ry in zip(gx, gy)], dtype=float)
+    _regions(ax, gx, gy, fired)
+
+    xs = np.array([lo, hi])
+    ax.plot(xs, [boundary_fn(x, weights, bias) for x in xs],
+            color=INK, lw=2.2, zorder=4)
+
+    _corners(ax, cases)
+    _square(ax, lo, hi)
+    title(ax, label, f"w={list(weights)}  b={bias:+g}   {note}")
+
+
+def _xor_try_panel(ax, lo, hi):
+    """The best a straight fence manages on XOR, and the corner it loses."""
+    (w1, w2), b = _XOR_TRY
+    gx, gy = np.meshgrid(np.linspace(lo, hi, 200), np.linspace(lo, hi, 200))
+    _regions(ax, gx, gy, np.where(w1 * gx + w2 * gy + b > 0, 1.0, 0.0))
+
+    xs = np.array([lo, hi])
+    ax.plot(xs, -(w1 * xs + b) / w2, color=INK, lw=2.2, zorder=4)
+
+    for (x1, x2), want in XOR_CASES:
+        if (w1 * x1 + w2 * x2 + b > 0) == bool(want):
+            continue
+        ax.scatter([x1], [x2], s=560, facecolors="none", edgecolor=INK,
+                   linewidth=2.4, zorder=7)
+        ax.annotate(f"wants {want}, sits in\nthe other half",
+                    (x1, x2), xytext=(-10, -40), textcoords="offset points",
+                    ha="right", fontsize=9, color=INK, fontweight="bold")
+
+    _corners(ax, XOR_CASES)
+    _square(ax, lo, hi)
+    title(ax, "XOR, best attempt",
+          "three corners land right, and three is the ceiling")
+
+
+def _xor_why_panel(ax, lo, hi):
+    """Why nothing does better: the two pairs cross.
+
+    No shading here, because the claim is not about one particular fence --
+    it is about all of them at once.
+    """
+    ax.plot([0, 1], [1, 0], color=FIRES, lw=2.4, ls=(0, (5, 3)), zorder=3)
+    ax.plot([0, 1], [0, 1], color=QUIET, lw=2.4, ls=(0, (5, 3)), zorder=3)
+    ax.scatter([0.5], [0.5], s=90, color=INK, zorder=6)
+    ax.annotate("both segments\nwant this point", (0.5, 0.5),
+                xytext=(16, 12), textcoords="offset points", fontsize=9,
+                color=INK, fontweight="bold")
+
+    _corners(ax, XOR_CASES)
+    _square(ax, lo, hi)
+    title(ax, "XOR, why never",
+          "a half-plane holding both ends holds everything between")
+
+
+_HOW_TO_READ = ("Each dot is coloured by the answer WANTED there; the half it "
+                "sits in is the answer the neuron GIVES. A corner is right "
+                "when the two colours match, which is why the ringed one "
+                "is not.")
+
+_XOR_WHY = ("A fence that keeps both blue corners in the firing half keeps "
+            "the whole blue segment there, crossing point included -- and "
+            "the same is true of the orange pair. One point, two halves, "
+            "no line.")
+
+
+def line_limit_figure(families, boundary_fn, ws_fn, step_fn):
+    """What one neuron can do, and the one thing it cannot, on shared axes.
+
+    Separate panels rather than the old single overlay: the claim being made
+    is about WHICH CORNERS end up in which region, and regions cannot be
+    stacked on one set of axes the way bare lines can. The gates keep their
+    neighbours, though, so the comparisons still cost one glance -- AND and
+    OR sit side by side with identical weights.
+
+    families: (label, weights, bias, cases, note), four of them, filling the
+    top row and the first cell of the bottom one.
     """
     theme()
     lo, hi = -0.6, 1.6
-    fig = figure(figsize=(11.8, 6.4))
-    ax = fig.add_subplot(1, 2, 1)
+    fig = figure(figsize=(12.8, 8.8))
 
-    for label, weights, bias, colour, dash in families:
-        xs = np.array([lo, hi])
-        ys = np.array([boundary_fn(x, weights, bias) for x in xs])
-        ax.plot(xs, ys, color=colour, lw=2.4, ls=dash, zorder=3,
-                label=f"{label}   w={list(weights)}  b={bias:+g}")
+    for i, (label, weights, bias, cases, note) in enumerate(families, 1):
+        _gate_panel(fig.add_subplot(2, 3, i), label, weights, bias, cases,
+                    note, boundary_fn, ws_fn, step_fn, lo, hi)
 
-    _corners(ax)
-    for x1, x2 in CORNERS:
-        ax.annotate(f"({x1},{x2})", (x1, x2), xytext=(0, -18),
-                    textcoords="offset points", ha="center", fontsize=8.5,
-                    color=INK_SOFT)
-    _square(ax, lo, hi)
-    ax.legend(loc="upper left", fontsize=8.5, frameon=True, facecolor=SURFACE,
-              edgecolor=GRID, framealpha=0.96).set_zorder(6)
-    title(ax, "Four neurons, one picture",
-          "colour = which weights. same colour means the same weights")
+    _xor_try_panel(fig.add_subplot(2, 3, len(families) + 1), lo, hi)
+    _xor_why_panel(fig.add_subplot(2, 3, len(families) + 2), lo, hi)
 
-    ax2 = fig.add_subplot(1, 2, 2)
-    ax2.axis("off")
-    ax2.text(0, 0.97,
-             "The two BLUE lines are AND and OR.\n"
-             "They have identical weights and differ\n"
-             "only in the bias, and they came out\n"
-             "parallel. That is what a bias does: it\n"
-             "SLIDES the line without turning it.\n\n"
-             "The green and orange lines have different\n"
-             "weights, and they point in different\n"
-             "directions. That is what weights do: they\n"
-             "TILT the line.\n\n"
-             "Two knobs, two motions, and between them\n"
-             "they can put a straight line anywhere on\n"
-             "this square. That is the entire expressive\n"
-             "range of one neuron -- which is also the\n"
-             "setup for the next figure, where four\n"
-             "points defeat all of it.",
-             va="top", fontsize=10.5, color=INK, linespacing=1.6)
-    fig.tight_layout()
+    fig.suptitle("One neuron is one straight fence    (blue half fires, "
+                 "orange half stays quiet)",
+                 x=0.02, y=0.985, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.text(0.02, 0.945, _HOW_TO_READ + "  " + _XOR_WHY,
+             fontsize=9.5, color=INK_SOFT, ha="left", va="top", wrap=True)
+    fig.tight_layout(rect=[0, 0, 0.995, 0.90])
     return fig
 
 
 def xor_figure():
-    """Why no single line works for XOR. Needs none of your functions."""
+    """The XOR half of the figure above, alone. Needs none of your functions.
+
+    This is what gets drawn while the exercise is still unwritten: the limit
+    does not depend on your code, so it is available from the first minute.
+    """
     theme()
-    fig = figure(figsize=(9.2, 4.6))
-    XOR = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
+    lo, hi = -0.6, 1.6
+    fig = figure(figsize=(9.4, 5.0))
 
-    ax = fig.add_subplot(1, 2, 1)
-    for slope, intercept in [(-1, 0.5), (-1, 1.5), (1, 0.4), (-0.2, 0.9),
-                             (2.5, -0.6)]:
-        xs = np.linspace(-0.6, 1.6, 2)
-        ax.plot(xs, slope * xs + intercept, color=INK_SOFT, lw=1, alpha=0.45)
-    for (x1, x2), want in XOR:
-        ax.scatter([x1], [x2], s=170, zorder=4,
-                   color=FIRES if want else QUIET,
-                   edgecolor=SURFACE, linewidth=2)
-        ax.annotate(str(want), (x1, x2), color=SURFACE, fontsize=9,
-                    fontweight="bold", ha="center", va="center", zorder=5)
-    ax.set_xlim(-0.6, 1.6)
-    ax.set_ylim(-0.6, 1.6)
-    ax.set_aspect("equal")
-    ax.set_xlabel("x1")
-    ax.set_ylabel("x2")
-    title(ax, "XOR", "try any straight line you like")
+    _xor_try_panel(fig.add_subplot(1, 2, 1), lo, hi)
+    _xor_why_panel(fig.add_subplot(1, 2, 2), lo, hi)
 
-    ax2 = fig.add_subplot(1, 2, 2)
-    ax2.axis("off")
-    ax2.text(0, 0.95,
-             "The two blue points sit on opposite corners.\n"
-             "The two orange points sit on the other two.\n\n"
-             "Every line above gets at least one point wrong,\n"
-             "and so does every line you could draw.\n\n"
-             "A single neuron IS a single line. That is the\n"
-             "whole reason it cannot do XOR, and the whole\n"
-             "reason networks have more than one layer.\n\n"
-             "Two layers bend the space first, then draw the\n"
-             "line in the bent space. That is exercise 3.",
-             va="top", fontsize=10.5, color=INK, linespacing=1.6)
-    fig.tight_layout()
+    fig.suptitle("XOR: the gate one neuron never gets",
+                 x=0.02, y=0.985, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.text(0.02, 0.94, _HOW_TO_READ + "  " + _XOR_WHY
+             + "  Which is why networks have more than one layer: two layers "
+             "bend the space first, then draw the fence in the bent space.",
+             fontsize=9.5, color=INK_SOFT, ha="left", va="top", wrap=True)
+    fig.tight_layout(rect=[0, 0, 0.995, 0.80])
     return fig
 
 

@@ -206,14 +206,18 @@ def truth(expected_bits, n=2):
     return list(zip(bits(n), expected_bits))
 
 
-# Weight vectors for the overlay figure. Two gates deliberately share one, so
-# that "same weights, parallel lines" is visible rather than asserted. Colour
-# identifies the weights, which is why those two are drawn in the same blue.
+# Four neurons for the fences figure, each with the answers it is supposed to
+# give. AND and OR deliberately share a weight vector and differ only in the
+# bias, so "the bias slides the fence without turning it" is a comparison
+# between two neighbouring panels rather than a claim in a caption.
 FAMILIES = [
-    ("AND", (1.0, 1.0), -1.5, "#2a78d6", "-"),
-    ("OR", (1.0, 1.0), -0.5, "#2a78d6", (0, (6, 3))),
-    ("x1 AND NOT x2", (1.0, -1.0), -0.5, "#1baf7a", "-"),
-    ("x1 worth double", (2.0, 1.0), -1.5, "#eb6834", "-"),
+    ("AND", (1.0, 1.0), -1.5, truth([0, 0, 0, 1]), "one corner sliced off"),
+    ("OR", (1.0, 1.0), -0.5, truth([0, 1, 1, 1]),
+     "same weights as AND, bias slid: same tilt, moved"),
+    ("x1 AND NOT x2", (1.0, -1.0), -0.5, truth([0, 0, 1, 0]),
+     "one weight negative, and the tilt turns"),
+    ("x1 worth double", (2.0, 1.0), -1.5, truth([0, 0, 1, 1]),
+     "x2 has a weight and still never decides anything"),
 ]
 
 
@@ -241,14 +245,15 @@ def plot():
     plots.neuron_surface_figure("AND", (1.0, 1.0), -1.5, truth([0, 0, 0, 1]),
                                 weighted_sum, step)
 
-    # Then every gate at once, so the comparison does not span two pictures.
+    # Then every gate on shared axes, plus the one gate none of them reach.
     if is_written(boundary_x2, (0.0, (1.0, 1.0), -1.5)):
-        plots.boundary_family_figure(FAMILIES, boundary_x2)
+        plots.line_limit_figure(FAMILIES, boundary_x2, weighted_sum, step)
     else:
-        console.print("\n[yellow]Skipping the four-boundaries figure: it draws "
-                      "boundary_x2, which is not written yet.[/yellow]")
+        console.print("\n[yellow]Skipping the fences figure: it draws "
+                      "boundary_x2, which is not written yet. Drawing the "
+                      "XOR half on its own instead.[/yellow]")
+        plots.xor_figure()
 
-    plots.xor_figure()
     plots.done("01")
 
 
