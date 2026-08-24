@@ -218,12 +218,17 @@ FAMILIES = [
 
 
 def plot():
-    """Draw what the tables can only describe. Needs all three of yours."""
+    """Draw what the tables can only describe.
+
+    Each figure asks only for the functions it actually uses, so partial
+    progress draws partial output rather than nothing: the surface figure needs
+    weighted_sum and step, and the overlay needs boundary_x2 on top of those.
+    """
     import plots
 
-    if not (ready() and is_written(boundary_x2, (0.0, (1.0, 1.0), -1.5))):
-        console.print("\n[yellow]The gate plots need weighted_sum, step and "
-                      "boundary_x2 written first.[/yellow]")
+    if not ready():
+        console.print("\n[yellow]The gate plots need weighted_sum and step "
+                      "written first.[/yellow]")
         console.print("[dim]Drawing the XOR figure only -- that one needs "
                       "nothing from you.[/dim]")
         plots.xor_figure()
@@ -231,10 +236,18 @@ def plot():
         return
 
     # One gate, in full: the plane, a cut through it, and what step() leaves.
+    # This one never calls boundary_x2 -- it finds the fence in the surface it
+    # already computed -- so it draws as soon as the neuron itself works.
     plots.neuron_surface_figure("AND", (1.0, 1.0), -1.5, truth([0, 0, 0, 1]),
                                 weighted_sum, step)
+
     # Then every gate at once, so the comparison does not span two pictures.
-    plots.boundary_family_figure(FAMILIES, boundary_x2)
+    if is_written(boundary_x2, (0.0, (1.0, 1.0), -1.5)):
+        plots.boundary_family_figure(FAMILIES, boundary_x2)
+    else:
+        console.print("\n[yellow]Skipping the four-boundaries figure: it draws "
+                      "boundary_x2, which is not written yet.[/yellow]")
+
     plots.xor_figure()
     plots.done("01")
 
