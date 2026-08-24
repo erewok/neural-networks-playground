@@ -164,6 +164,39 @@ def is_written(fn, probe_args):
     return True
 
 
+def fence_flips(x1, weights, bias, ws_fn, step_fn, fence_fn, eps=1e-3):
+    """1 if the neuron changes its mind across the x2 the fence function returns.
+
+    Nothing hardcoded: it asks the fence where the boundary is, then asks the
+    neuron itself what it thinks on either side of that spot.
+    """
+    x2 = fence_fn(x1, weights, bias)
+    below = step_fn(ws_fn((x1, x2 - eps), weights, bias))
+    above = step_fn(ws_fn((x1, x2 + eps), weights, bias))
+    return 1 if below != above else 0
+
+
+def fences(cases, note=""):
+    """cases: list of (x1, weights, bias). Every row wants a 1."""
+    written = ready() and is_written(boundary_x2, (0.0, (1.0, 1.0), -1.5))
+    t = ExerciseTable(
+        title="the fence and the neuron, checked against each other",
+        note=note,
+        input_header="x1, weights, bias",
+        yours_written=written,
+        fmt=fmt_int,
+        compare=exact,
+    )
+    for x1, weights, bias in cases:
+        label = f"x1={x1:g}, w={weights}, b={bias:+g}"
+        t.add(label, 1,
+              Cell(fence_flips(x1, weights, bias, weighted_sum_broken,
+                               step_broken, boundary_x2_broken)),
+              Cell(fence_flips(x1, weights, bias, weighted_sum, step,
+                               boundary_x2)) if written else None)
+    return t.render()
+
+
 def bits(n):
     """All 0/1 combinations of n inputs, in counting order."""
     return list(product([0, 1], repeat=n))
@@ -215,6 +248,16 @@ if __name__ == "__main__":
     results.append(gate(
         "OR", [1.0, 1.0], -0.5, truth([0, 1, 1, 1]),
         "each input is worth 1 point; you need more than 0.5 points"))
+
+    # --- a bar the evidence can land exactly on -------------------------
+    # Same truth table as AND, reached differently: here (0,1) and (1,0) put
+    # the total at precisely the bar rather than half a point short of it.
+    # Everywhere else in this file the total clears or misses by 0.5 or more,
+    # so without these rows nothing says what happens ON the bar.
+    results.append(gate(
+        "AND, landing on the bar", [1.0, 1.0], -1.0, truth([0, 0, 0, 1]),
+        "each input is worth 1 point and you need more than 1 -- "
+        "so one input alone lands exactly on the bar"))
 
     # --- asymmetric weights: does each input reach its own weight? -------
     results.append(gate(
@@ -271,6 +314,23 @@ if __name__ == "__main__":
             ((0.0, (-1.0, -1.0), 1.5), +1.50),  # NAND: same fence as AND
         ],
         "two points make a line; these are the ends of each gate's fence"))
+
+    # The table above scores boundary_x2 against eight answers written down in
+    # advance. It never asks the neuron whether that is really where it changes
+    # its mind. Property 5 says the fence IS the flip, so check the two halves
+    # against each other rather than against a number -- and on weights the
+    # eight rows never visit.
+    results.append(fences(
+        [
+            (0.0, (1.0, 1.0), -1.5),     # AND, same fence as above
+            (1.0, (1.0, -1.0), -0.5),    # mixed signs
+            (-2.0, (0.5, 4.0), -1.0),    # a steep fence, weights unlike any row
+            (3.0, (3.0, -0.5), 2.0),     # shallow, and tilted the other way
+            (-0.5, (-2.0, -3.0), -1.5),  # both weights negative
+            (0.0, (1.0, 1.0), 0.0),      # a fence through the origin
+        ],
+        "no expected numbers here: each row asks the neuron itself whether it "
+        "flips either side of the x2 your fence returned"))
 
     summary(results)
 

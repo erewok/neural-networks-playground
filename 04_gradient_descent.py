@@ -52,8 +52,8 @@ Properties these should have:
 import random
 import sys
 
-from harness import (Cell, ExerciseTable, approx, console, fmt_float,
-                     not_written, section, summary)
+from harness import (CROSS, TICK, Cell, ExerciseTable, approx, console,
+                     fmt_float, not_written, section, summary)
 
 # --------------------------------------------------------------- the originals
 # Left here on purpose. Don't edit these -- the harness runs them beside yours.
@@ -183,6 +183,50 @@ def train(data, rate=0.02, epochs=120, w=0.0, b=0.0):
     return w, b, history
 
 
+# How close the fitted line has to land before we call it a fit. The points
+# carry noise, so the answer is not supposed to be exact -- it is supposed to
+# be near, and to have got there by going downhill.
+W_TOLERANCE = B_TOLERANCE = 0.3
+
+
+def claim(text, holds):
+    console.print(f"  [{'bold green' if holds else 'bold red'}]"
+                  f"{TICK if holds else CROSS}[/] {text}")
+    return holds
+
+
+def num(v):
+    """A rate set too high sends these to 1e130, which is unreadable as .3f."""
+    return f"{v:.3f}" if abs(v) < 1e6 else f"{v:.3g}"
+
+
+def verdict(history, w, b, holdout_mse):
+    """The section above prints numbers. This decides whether they are good.
+
+    Without it the file can be read but never failed -- 02 and 03 both end on a
+    pass/fail and this one did not. It catches what the tables cannot: the five
+    functions can each be right row by row while the loop built out of them
+    still walks the wrong way, which is what a rate set too high looks like.
+    """
+    start, end = history[0][2], history[-1][2]
+    console.print()
+    good = claim(f"the loss went down, {num(start)} to {num(end)}", end < start)
+    good &= claim("and went down at every single epoch, never uphill",
+                  all(history[i + 1][2] <= history[i][2] + 1e-12
+                      for i in range(len(history) - 1)))
+    good &= claim(f"w landed within {W_TOLERANCE} of the line the points came "
+                  f"from ({num(abs(w - TRUE_W))} away)",
+                  abs(w - TRUE_W) < W_TOLERANCE)
+    good &= claim(f"b did too ({num(abs(b - TRUE_B))} away)",
+                  abs(b - TRUE_B) < B_TOLERANCE)
+    # Only meaningful once the fit above actually worked: a line that exploded
+    # is equally terrible on both sets, and that is not generalization.
+    good &= claim(f"and it does about as well on points it never trained on "
+                  f"({num(holdout_mse)} against {num(end)})",
+                  good and holdout_mse < 3.0 * end)
+    return good
+
+
 def plot():
     import plots
 
@@ -287,6 +331,11 @@ if __name__ == "__main__":
                       f"   [dim](training loss was {history[-1][2]:.3f})[/dim]")
         console.print("    [dim]no targets were consulted to make those "
                       "guesses -- only predict()[/dim]")
+
+        if verdict(history, w, b, err / len(holdout)):
+            console.print("\n  [bold green]the line was found by going "
+                          "downhill, and it holds up off the training set."
+                          "[/bold green]")
         console.print("\n  [dim]run `just plot 4` to see the line move[/dim]")
     else:
         not_written("fitting a line")

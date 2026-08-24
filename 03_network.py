@@ -38,12 +38,19 @@ SIGN CONVENTION -- worth reading, it differs from 02
 
 WHY THREE HIDDEN UNITS AND NOT TWO
   Two is the theoretical minimum for XOR, and hand_wire() below uses exactly
-  two to prove it. But gradient descent starting from random weights only finds
-  the answer with two units about half the time -- the rest of the time it slides
-  into a corner it cannot climb out of and sits there at three-out-of-four
-  forever. Three units finds it every time. Worth remembering: "the network can
-  represent the answer" and "training will find the answer" are separate claims,
-  and only the first one is guaranteed.
+  two to prove it. But whether training FINDS the answer depends on where the
+  random weights happened to start. Sometimes it slides into a corner it cannot
+  climb out of and sits there at three-out-of-four forever. Over the first 100
+  seeds, at the rate, epochs and init_scale set below:
+
+      two hidden units    80 of 100 starts
+      three hidden units  99 of 100 starts   (seed 51 is the one that fails)
+
+  Those are measured, not remembered -- the last section of this file runs the
+  sweep, and `python 03_network.py seeds 100` reruns it at any width you like.
+  Worth remembering: "the network can represent the answer" and "training will
+  find the answer" are separate claims, and only the first one is guaranteed.
+  Notice too that three units does not make it certain, only reliable.
 
 Properties these should have:
 
@@ -61,8 +68,8 @@ import math
 import random
 import sys
 
-from harness import (TICK, Cell, ExerciseTable, approx, console, fmt_float,
-                     not_written, prediction_row, section, summary)
+from harness import (CROSS, TICK, Cell, ExerciseTable, approx, console,
+                     fmt_float, not_written, prediction_row, section, summary)
 
 
 def sigmoid(z):
@@ -249,6 +256,54 @@ def run_xor(label, out_fn, hid_fn, w_fn):
     return solved
 
 
+SEED_SWEEP = 30
+
+
+def seed_sweep(out_fn, hid_fn, w_fn, n_hidden, seeds):
+    """How often does training from scratch actually land on XOR?
+
+    run_xor() above trains one network from one seed. That says nothing about
+    how often it works, and how often it works is the whole point of the
+    "three units, not two" claim in the header.
+    """
+    failed = []
+    for seed in range(seeds):
+        net = Network(out_fn, hid_fn, w_fn, n_hidden=n_hidden, seed=seed)
+        net.train(XOR)
+        if not net.solves(XOR):
+            failed.append(seed)
+    return seeds - len(failed), failed
+
+
+def claim(text, holds):
+    console.print(f"  [{'bold green' if holds else 'bold red'}]"
+                  f"{TICK if holds else CROSS}[/] {text}")
+    return holds
+
+
+def run_seed_sweep(out_fn, hid_fn, w_fn, seeds=SEED_SWEEP):
+    console.print(f"\n[dim]training from scratch {seeds} times at each width, "
+                  f"seeds 0..{seeds - 1}[/dim]\n")
+    rates = {}
+    for n_hidden in (2, 3):
+        ok, failed = seed_sweep(out_fn, hid_fn, w_fn, n_hidden, seeds)
+        rates[n_hidden] = ok
+        bad = (f"  [dim]failed from seed{'s' if len(failed) > 1 else ''} "
+               f"{', '.join(str(f) for f in failed[:8])}"
+               f"{' ...' if len(failed) > 8 else ''}[/dim]") if failed else ""
+        console.print(f"  [bold cyan]{n_hidden} hidden units[/bold cyan]  "
+                      f"found XOR from [bold]{ok}/{seeds}[/bold] starts{bad}")
+
+    console.print()
+    good = claim("two units does not always get there -- capacity is not "
+                 "the same as trainability", rates[2] < seeds)
+    good &= claim("three units gets there more often than two",
+                  rates[3] > rates[2])
+    good &= claim(f"three units is reliable: at least 90% of starts "
+                  f"({rates[3]}/{seeds})", rates[3] >= 0.9 * seeds)
+    return good
+
+
 def plot():
     """The sigmoid always draws. The network's region needs your three."""
     import plots
@@ -271,6 +326,17 @@ def plot():
 if __name__ == "__main__":
     if "plot" in sys.argv:
         plot()
+        sys.exit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] == "seeds":
+        count = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+        section(f"how often does training find XOR at all? ({count} starts)")
+        if all(is_written(fn, probe) for fn, probe in
+               [(output_delta, (0.5, 1)), (hidden_delta, (0.5, 1.0, 0.2)),
+                (updated_weight, (0.0, 0.5, 1.0, 0.5))]):
+            run_seed_sweep(output_delta, hidden_delta, updated_weight, count)
+        else:
+            not_written("the seed sweep")
         sys.exit(0)
 
     if len(sys.argv) > 1 and sys.argv[1] == "handwired":
@@ -336,5 +402,10 @@ if __name__ == "__main__":
         if run_xor("with yours", output_delta, hidden_delta, updated_weight):
             console.print("\n  [bold green]Two layers, and the thing one neuron "
                           "could never do is done.[/bold green]")
+
+        section("that was one random start -- how often does it work?")
+        if run_seed_sweep(output_delta, hidden_delta, updated_weight):
+            console.print("\n  [dim]run `python 03_network.py seeds 100` for a "
+                          "longer sweep[/dim]")
     else:
         not_written("with yours")
