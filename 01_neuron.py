@@ -206,6 +206,17 @@ def truth(expected_bits, n=2):
     return list(zip(bits(n), expected_bits))
 
 
+# Weight vectors for the overlay figure. Two gates deliberately share one, so
+# that "same weights, parallel lines" is visible rather than asserted. Colour
+# identifies the weights, which is why those two are drawn in the same blue.
+FAMILIES = [
+    ("AND", (1.0, 1.0), -1.5, "#2a78d6", "-"),
+    ("OR", (1.0, 1.0), -0.5, "#2a78d6", (0, (6, 3))),
+    ("x1 AND NOT x2", (1.0, -1.0), -0.5, "#1baf7a", "-"),
+    ("x1 worth double", (2.0, 1.0), -1.5, "#eb6834", "-"),
+]
+
+
 def plot():
     """Draw what the tables can only describe. Needs all three of yours."""
     import plots
@@ -219,19 +230,11 @@ def plot():
         plots.done("01-xor")
         return
 
-    def neuron(x, weights, bias):
-        return step(weighted_sum(x, weights, bias))
-
-    # Only gates whose fence is a function of x1 -- a zero second weight makes
-    # it vertical, which boundary_x2 cannot express and the tables never ask for.
-    gates = [
-        ("AND", [1.0, 1.0], -1.5, truth([0, 0, 0, 1])),
-        ("OR", [1.0, 1.0], -0.5, truth([0, 1, 1, 1])),
-        ("NAND", [-1.0, -1.0], 1.5, truth([1, 1, 1, 0])),
-        ("NOR", [-1.0, -1.0], 0.5, truth([1, 0, 0, 0])),
-        ("x1 AND NOT x2", [1.0, -1.0], -0.5, truth([0, 0, 1, 0])),
-    ]
-    plots.gates_figure(gates, neuron, boundary_x2)
+    # One gate, in full: the plane, a cut through it, and what step() leaves.
+    plots.neuron_surface_figure("AND", (1.0, 1.0), -1.5, truth([0, 0, 0, 1]),
+                                weighted_sum, step)
+    # Then every gate at once, so the comparison does not span two pictures.
+    plots.boundary_family_figure(FAMILIES, boundary_x2)
     plots.xor_figure()
     plots.done("01")
 

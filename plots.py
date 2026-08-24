@@ -38,6 +38,42 @@ GRID = "#dedcd7"
 # figure whose background is a sequential ramp. No class meaning there.
 TRAIL = QUIET
 
+# Sequential blue, light -> dark, for "how far into the run is this". Discrete
+# ordered marks, so the lightest step is 250 -- anything lighter recedes into
+# the paper. Used by exercise 2 for updates and exercise 4 for epochs.
+EPOCH_RAMP = ["#86b6ef", "#5598e7", "#3987e5", "#2a78d6", "#256abf",
+              "#1c5cab", "#0d366b"]
+
+
+def _signed_ramp():
+    """Orange -> paper -> blue, for a quantity that can be either side of zero.
+
+    This does not break the colour rule at the top of the file. The hue still
+    means the class it always means -- orange is the quiet side, blue is the
+    firing side -- and only the LIGHTNESS carries magnitude. Paper-white is
+    exactly zero, which is where the decision boundary sits.
+    """
+    from matplotlib.colors import LinearSegmentedColormap
+    return LinearSegmentedColormap.from_list(
+        "signed", [QUIET, "#f6d3c2", SURFACE, "#bcd6f2", FIRES])
+
+
+def boundary_points(weights, bias, lo, hi):
+    """The fence as two endpoints, or None when there is no line to draw.
+
+    plots only. Exercise 1 asks you to write this as a function of x1; here it
+    also has to cope with a vertical fence and with a neuron whose weights are
+    still all zero, neither of which the exercise tests.
+    """
+    w1, w2 = weights[0], weights[1]
+    if abs(w2) > 1e-12:
+        xs = np.array([lo, hi])
+        return xs, -(w1 * xs + bias) / w2
+    if abs(w1) > 1e-12:
+        x = -bias / w1
+        return np.array([x, x]), np.array([lo, hi])
+    return None
+
 _FIGS = []
 
 
@@ -92,74 +128,160 @@ def done(name="figure"):
 # ------------------------------------------------------------------ exercise 1
 
 
-def gate_panel(ax, name, weights, bias, cases, neuron_fn, boundary_fn):
-    """One gate: the region the neuron fires in, the fence, and the four inputs."""
-    lo, hi = -0.6, 1.6
+CORNERS = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
-    # Shade the two regions by asking the neuron about a grid of points.
-    gx, gy = np.meshgrid(np.linspace(lo, hi, 220), np.linspace(lo, hi, 220))
-    zz = np.array([[neuron_fn((a, b), weights, bias) for a, b in zip(rx, ry)]
-                   for rx, ry in zip(gx, gy)], dtype=float)
-    ax.contourf(gx, gy, zz, levels=[-0.5, 0.5, 1.5],
-                colors=[QUIET, FIRES], alpha=0.10)
 
-    # The fence itself: where the weighted sum lands exactly on zero.
-    xs = np.linspace(lo, hi, 2)
-    ys = [boundary_fn(x, weights, bias) for x in xs]
-    ax.plot(xs, ys, color=INK_SOFT, lw=2, zorder=3, label="decision boundary")
+def _corners(ax, cases=None, size=150):
+    """The four binary inputs. Coloured by the answer wanted, when there is one."""
+    for x1, x2 in CORNERS:
+        want = dict(cases).get((x1, x2)) if cases else None
+        ax.scatter([x1], [x2], s=size, zorder=5,
+                   color=(FIRES if want else QUIET) if cases else SURFACE,
+                   edgecolor=SURFACE if cases else INK_SOFT, linewidth=2)
+        if cases:
+            ax.annotate(str(want), (x1, x2), color=SURFACE, fontsize=9,
+                        fontweight="bold", ha="center", va="center", zorder=6)
 
-    # The four inputs, coloured by the answer they are supposed to get.
-    for (x1, x2), want in cases:
-        ax.scatter([x1], [x2], s=150, zorder=4,
-                   color=FIRES if want else QUIET,
-                   edgecolor=SURFACE, linewidth=2)
-        ax.annotate(str(want), (x1, x2), color=SURFACE, fontsize=9,
-                    fontweight="bold", ha="center", va="center", zorder=5)
 
+def _square(ax, lo, hi):
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
     ax.set_aspect("equal")
     ax.set_xlabel("x1")
     ax.set_ylabel("x2")
-    title(ax, name, f"weights={list(weights)}  bias={bias}")
 
 
-def gates_figure(gates, neuron_fn, boundary_fn):
-    """gates: list of (name, weights, bias, cases)."""
+def neuron_surface_figure(name, weights, bias, cases, ws_fn, step_fn):
+    """The one thing the old version of this figure threw away: the z axis.
+
+    A neuron is a tilted plane over the (x1, x2) floor, and step() slices it at
+    zero. Draw the plane, draw a cut through it, then draw what is left after
+    the slice -- in that order, because the last panel on its own is what made
+    the old figure look like an arbitrary line on a shaded background.
+    """
     theme()
-    n = len(gates)
-    cols = min(3, n)
-    rows = (n + cols - 1) // cols
-    fig = figure(figsize=(4.2 * cols, 4.3 * rows))
-    for i, (name, weights, bias, cases) in enumerate(gates, 1):
-        ax = fig.add_subplot(rows, cols, i)
-        gate_panel(ax, name, weights, bias, cases, neuron_fn, boundary_fn)
-    # The leftover panel earns its place as a caption rather than sitting blank.
-    if n < rows * cols:
-        ax = fig.add_subplot(rows, cols, n + 1)
-        ax.axis("off")
-        ax.text(0, 0.92,
-                "Same code in all five panels.\n"
-                "Only the numbers changed.\n\n"
-                "The weights TILT the line.\n"
-                "AND and OR have identical\n"
-                "weights, so their lines are\n"
-                "parallel -- only the bias\n"
-                "differs, and the bias SLIDES\n"
-                "the line without turning it.\n\n"
-                "Flip both weights negative and\n"
-                "the shaded side swaps: that is\n"
-                "all NAND and NOR are.",
-                va="top", fontsize=10, color=INK, linespacing=1.55)
+    lo, hi = -0.6, 1.6
+    fig = figure(figsize=(14.2, 4.9))
 
-    fig.suptitle("One neuron draws one straight line",
-                 x=0.02, y=0.995, ha="left", fontsize=13, fontweight="bold",
+    gx, gy = np.meshgrid(np.linspace(lo, hi, 240), np.linspace(lo, hi, 240))
+    zz = np.array([[ws_fn((a, b), weights, bias) for a, b in zip(rx, ry)]
+                   for rx, ry in zip(gx, gy)])
+    span = float(np.abs(zz).max())
+
+    # -- panel 1: the weighted sum itself, before any decision is taken -----
+    ax = fig.add_subplot(1, 3, 1)
+    im = ax.contourf(gx, gy, zz, levels=np.linspace(-span, span, 25),
+                     cmap=_signed_ramp(), vmin=-span, vmax=span)
+    ax.contour(gx, gy, zz, levels=[0.0], colors=[INK], linewidths=2.2)
+    bar = fig.colorbar(im, ax=ax, pad=0.02, ticks=[-span, 0, span])
+    bar.set_label("the weighted sum, z", color=INK_SOFT, fontsize=9)
+    bar.ax.set_yticklabels([f"{-span:.1f}", "0", f"{span:.1f}"], fontsize=8)
+    _corners(ax, cases)
+    _square(ax, lo, hi)
+    title(ax, "1. What the neuron computes",
+          "a tilted plane. white is exactly zero")
+
+    # -- panel 2: a cut straight across it ---------------------------------
+    # Walk along the weight vector: that is the direction the plane climbs
+    # fastest, so the cut is as steep as this neuron ever gets.
+    ax2 = fig.add_subplot(1, 3, 2)
+    w1, w2 = weights[0], weights[1]
+    norm = (w1 ** 2 + w2 ** 2) ** 0.5 or 1.0
+    ux, uy = w1 / norm, w2 / norm
+    ts = np.linspace(-1.4, 1.4, 400)
+    cx, cy = 0.5, 0.5
+    zs = [ws_fn((cx + t * ux, cy + t * uy), weights, bias) for t in ts]
+    outs = [step_fn(z) for z in zs]
+
+    ax2.axhline(0, color=GRID, lw=1, zorder=0)
+    ax2.plot(ts, zs, color=INK_SOFT, lw=2.2, label="z, the weighted sum")
+    ax2.plot(ts, outs, color=FIRES, lw=2.6, label="step(z), what comes out")
+    ax2.fill_between(ts, -span, 0, where=[z <= 0 for z in zs], color=QUIET,
+                     alpha=0.10)
+    crossing = ts[int(np.argmin(np.abs(zs)))]
+    ax2.axvline(crossing, color=INK, lw=2.2, zorder=3)
+    ax2.annotate("the fence:\nz = 0", xy=(crossing, -span * 0.75),
+                 xytext=(10, 0), textcoords="offset points", fontsize=9,
+                 color=INK, fontweight="bold")
+    ax2.set_xlabel("distance walked across the plane")
+    ax2.set_ylabel("z,  and step(z)")
+    ax2.legend(loc="upper left", frameon=False, fontsize=9)
+    title(ax2, "2. Cut across it",
+          "z ramps smoothly; step keeps only which side of zero it reached")
+
+    # -- panel 3: what survives the cut ------------------------------------
+    ax3 = fig.add_subplot(1, 3, 3)
+    oo = np.array([[step_fn(v) for v in row] for row in zz], dtype=float)
+    ax3.contourf(gx, gy, oo, levels=[-0.5, 0.5, 1.5], colors=[QUIET, FIRES],
+                 alpha=0.16)
+    ax3.contour(gx, gy, zz, levels=[0.0], colors=[INK], linewidths=2.2)
+    _corners(ax3, cases)
+    _square(ax3, lo, hi)
+    title(ax3, "3. What is left afterwards",
+          "above the line becomes 1, below becomes 0")
+
+    fig.suptitle(f"A neuron is a tilted plane, cut at zero    ({name}: "
+                 f"weights={list(weights)}, bias={bias})",
+                 x=0.02, y=0.985, ha="left", fontsize=13, fontweight="bold",
                  color=INK)
-    fig.text(0.02, 0.958,
-             "Blue = the neuron fires (1).   Orange = it stays quiet (0).   "
-             "The line is where the weighted sum comes out to exactly zero.",
+    fig.text(0.02, 0.905,
+             "Both axes are INPUTS. The output is not an axis here -- it is "
+             "the colour. That is why the black line is not a line of best "
+             "fit: nothing is being fitted, it is just where z crosses zero.",
              fontsize=9.5, color=INK_SOFT, ha="left")
-    fig.tight_layout(rect=[0, 0, 1, 0.945])
+    fig.tight_layout(rect=[0, 0, 0.995, 0.87])
+    return fig
+
+
+def boundary_family_figure(families, boundary_fn):
+    """Every gate at once, on ONE set of axes.
+
+    The old figure put five gates in five panels and asked you to compare them
+    from memory. Overlaid, the two claims in the caption are single glances:
+    lines sharing a colour share their weights, and they are parallel.
+    """
+    theme()
+    lo, hi = -0.6, 1.6
+    fig = figure(figsize=(11.8, 6.4))
+    ax = fig.add_subplot(1, 2, 1)
+
+    for label, weights, bias, colour, dash in families:
+        xs = np.array([lo, hi])
+        ys = np.array([boundary_fn(x, weights, bias) for x in xs])
+        ax.plot(xs, ys, color=colour, lw=2.4, ls=dash, zorder=3,
+                label=f"{label}   w={list(weights)}  b={bias:+g}")
+
+    _corners(ax)
+    for x1, x2 in CORNERS:
+        ax.annotate(f"({x1},{x2})", (x1, x2), xytext=(0, -18),
+                    textcoords="offset points", ha="center", fontsize=8.5,
+                    color=INK_SOFT)
+    _square(ax, lo, hi)
+    ax.legend(loc="upper left", fontsize=8.5, frameon=True, facecolor=SURFACE,
+              edgecolor=GRID, framealpha=0.96).set_zorder(6)
+    title(ax, "Four neurons, one picture",
+          "colour = which weights. same colour means the same weights")
+
+    ax2 = fig.add_subplot(1, 2, 2)
+    ax2.axis("off")
+    ax2.text(0, 0.97,
+             "The two BLUE lines are AND and OR.\n"
+             "They have identical weights and differ\n"
+             "only in the bias, and they came out\n"
+             "parallel. That is what a bias does: it\n"
+             "SLIDES the line without turning it.\n\n"
+             "The green and orange lines have different\n"
+             "weights, and they point in different\n"
+             "directions. That is what weights do: they\n"
+             "TILT the line.\n\n"
+             "Two knobs, two motions, and between them\n"
+             "they can put a straight line anywhere on\n"
+             "this square. That is the entire expressive\n"
+             "range of one neuron -- which is also the\n"
+             "setup for the next figure, where four\n"
+             "points defeat all of it.",
+             va="top", fontsize=10.5, color=INK, linespacing=1.6)
+    fig.tight_layout()
     return fig
 
 
@@ -204,13 +326,85 @@ def xor_figure():
     return fig
 
 
+# ------------------------------------------------------------------ exercise 2
+
+
+def _trail_panel(ax, name, examples, history, converged):
+    """One task: the fence swinging into place, one update at a time."""
+    lo, hi = -0.6, 1.6
+
+    # A run can take a hundred updates. Show a handful, spread over the whole
+    # run rather than bunched at the start where the big corrections happen.
+    n = len(history)
+    picks = sorted({int(round(i * (n - 1) / (len(EPOCH_RAMP) - 1)))
+                    for i in range(len(EPOCH_RAMP))})
+
+    for colour, i in zip(EPOCH_RAMP, picks):
+        pts = boundary_points(history[i][0], history[i][1], lo, hi)
+        if pts is None:      # weights still all zero: no fence exists yet
+            continue
+        last = i == picks[-1]
+        # Early fences fade back so the run reads as one motion rather than a
+        # bundle of equally loud lines. The last one is the only black one.
+        ax.plot(pts[0], pts[1], color=INK if last else colour,
+                lw=2.6 if last else 1.4, alpha=1.0 if last else 0.6,
+                zorder=4 if last else 2)
+
+    _corners(ax, examples)
+    _square(ax, lo, hi)
+    title(ax, name, f"{n - 1} updates, pale to dark"
+          + ("" if converged else "  --  and still moving"))
+
+
+def perceptron_trail_figure(runs):
+    """runs: list of (name, examples, history, mistakes, converged).
+
+    The learning rule in 02 is a MOTION, and a table of final weights is the
+    one thing that cannot show a motion. Each update leaves a line behind, so
+    the whole run is visible at once: AND and OR walk to a fence and stop, XOR
+    never stops, because there is no fence for it to stop at.
+    """
+    theme()
+    cols = len(runs)
+    fig = figure(figsize=(4.6 * cols, 8.6))
+
+    for i, (name, examples, history, mistakes, converged) in enumerate(runs):
+        ax = fig.add_subplot(2, cols, i + 1)
+        _trail_panel(ax, name, examples, history, converged)
+
+        ax2 = fig.add_subplot(2, cols, cols + i + 1)
+        epochs = range(1, len(mistakes) + 1)
+        ax2.bar(epochs, mistakes, color=FIRES if converged else QUIET,
+                width=0.75, zorder=3)
+        ax2.set_xlabel("epoch")
+        ax2.set_ylabel("mistakes made")
+        # Headroom above a full bar, so the note never sits on the data.
+        ax2.set_ylim(0, 5.8)
+        ax2.set_yticks([0, 1, 2, 3, 4])
+        note = (f"epoch {len(mistakes)} made no mistakes at all,\n"
+                f"so there was nothing left to correct\nand training stopped"
+                if converged else
+                f"still wrong about {mistakes[-1]} of the 4 inputs\n"
+                f"at epoch {len(mistakes)}, and it would stay\nthat way forever")
+        ax2.text(0.97, 0.93, note, transform=ax2.transAxes, ha="right",
+                 va="top", fontsize=9, color=INK, linespacing=1.5)
+        title(ax2, "Mistakes per epoch",
+              "falls to zero, and stays there" if converged
+              else "never reaches zero, however long you run it")
+
+    fig.suptitle("Learning is the fence moving",
+                 x=0.02, y=0.995, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.text(0.02, 0.962,
+             "Every wrong answer nudges the weights, and every nudge moves "
+             "this line. Light lines are early, the black line is where it "
+             "finished. Same axes and same colours as exercise 1.",
+             fontsize=9.5, color=INK_SOFT, ha="left")
+    fig.tight_layout(rect=[0, 0, 1, 0.945])
+    return fig
+
+
 # ------------------------------------------------------------------ exercise 4
-
-# Sequential blue, light -> dark, for "which epoch is this". Discrete ordered
-# marks, so the lightest step is 250 -- anything lighter recedes into the paper.
-EPOCH_RAMP = ["#86b6ef", "#5598e7", "#3987e5", "#2a78d6", "#256abf",
-              "#1c5cab", "#0d366b"]
-
 
 def fit_figure(train_pts, history, true_w, true_b):
     """The line moving into place, and the error falling as it goes."""

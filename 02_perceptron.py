@@ -35,11 +35,18 @@ The last section wires your three functions into a real training loop, so you
 can see arithmetic that passes the tables turn into a neuron that actually
 learns. Both parts run automatically.
 
+`just plot 2` draws that loop instead of tallying it. The learning rule is a
+motion -- the decision boundary from exercise 1, shifting a little on every
+mistake -- and a table of final weights is the one thing that cannot show a
+motion. AND and OR walk to a fence and stop. XOR never stops.
+
 One thing worth knowing so you don't chase it: a single neuron genuinely cannot
 learn XOR. That is a real mathematical limit, not a defect in this file. AND and
 OR converging while XOR never does is the correct end state, and it is why 03
 exists.
 """
+
+import sys
 
 from harness import (Cell, ExerciseTable, approx, console, fmt_float,
                      not_written, outcome, section, summary)
@@ -132,6 +139,9 @@ class Perceptron:
         self.bias = 0.0
         self.rate = rate
         self.err_fn, self.w_fn, self.b_fn = err_fn, w_fn, b_fn
+        # Kept for the plots only -- nothing in the learning rule reads these.
+        self.history = [(list(self.weights), self.bias)]
+        self.mistakes = []
 
     def predict(self, inputs):
         return step(weighted_sum(inputs, self.weights, self.bias))
@@ -147,6 +157,8 @@ class Perceptron:
                 self.weights = [self.w_fn(w, x, err, self.rate)
                                 for w, x in zip(self.weights, inputs)]
                 self.bias = self.b_fn(self.bias, err, self.rate)
+                self.history.append((list(self.weights), self.bias))
+            self.mistakes.append(mistakes)
             if mistakes == 0:
                 return True
         return False
@@ -174,6 +186,29 @@ def train_all(label, err_fn, w_fn, b_fn):
             detail=f"w=[{w}] b={p.bias:+.1f}",
             why="should solve" if should else "one neuron cannot solve this")
     return good
+
+
+def plot():
+    """The learning rule is a motion, and a table of final weights cannot show
+    a motion. Draw the fence after every single update instead."""
+    import plots
+
+    if not all(is_written(fn, args) for fn, args in
+               [(error, (1, 0)), (updated_weight, (0.0, 1, 1.0, 0.1)),
+                (updated_bias, (0.0, 1.0, 0.1))]):
+        console.print("\n[yellow]The training plots need all three functions "
+                      "written first.[/yellow]")
+        console.print("[dim]There is no motion to draw until the weights can "
+                      "move.[/dim]")
+        return
+
+    runs = []
+    for name, data, _ in TASKS:
+        p = Perceptron(2, error, updated_weight, updated_bias)
+        converged = p.train(data)
+        runs.append((name, data, p.history, p.mistakes, converged))
+    plots.perceptron_trail_figure(runs)
+    plots.done("02")
 
 
 if __name__ == "__main__":
@@ -221,3 +256,6 @@ if __name__ == "__main__":
                           "XOR correctly not learned.[/bold green]")
     else:
         not_written("with yours")
+
+    if "plot" in sys.argv:
+        plot()
