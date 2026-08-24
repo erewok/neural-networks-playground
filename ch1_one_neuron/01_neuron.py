@@ -164,36 +164,39 @@ def is_written(fn, probe_args):
     return True
 
 
-def fence_flips(x1, weights, bias, ws_fn, step_fn, fence_fn, eps=1e-3):
-    """1 if the neuron changes its mind across the x2 the fence function returns.
+def fence_z(x1, weights, bias, ws_fn, fence_fn):
+    """(the x2 the fence returned, the neuron's own z at that spot).
 
     Nothing hardcoded: it asks the fence where the boundary is, then asks the
-    neuron itself what it thinks on either side of that spot.
+    neuron what it computes there. On the fence that number is zero -- not
+    because a table says so, but because zero is what "on the fence" means.
+    So the column reads like every other table here: a number you can trace
+    back to the inputs, and a miss you can measure rather than just count.
     """
     x2 = fence_fn(x1, weights, bias)
-    below = step_fn(ws_fn((x1, x2 - eps), weights, bias))
-    above = step_fn(ws_fn((x1, x2 + eps), weights, bias))
-    return 1 if below != above else 0
+    return x2, ws_fn((x1, x2), weights, bias)
 
 
 def fences(cases, note=""):
-    """cases: list of (x1, weights, bias). Every row wants a 1."""
+    """cases: list of (x1, weights, bias). Every row wants a z of zero."""
     written = ready() and is_written(boundary_x2, (0.0, (1.0, 1.0), -1.5))
     t = ExerciseTable(
         title="the fence and the neuron, checked against each other",
         note=note,
         input_header="x1, weights, bias",
         yours_written=written,
-        fmt=fmt_int,
-        compare=exact,
+        fmt=fmt_float(2),
+        compare=approx,
     )
     for x1, weights, bias in cases:
         label = f"x1={x1:g}, w={weights}, b={bias:+g}"
-        t.add(label, 1,
-              Cell(fence_flips(x1, weights, bias, weighted_sum_broken,
-                               step_broken, boundary_x2_broken)),
-              Cell(fence_flips(x1, weights, bias, weighted_sum, step,
-                               boundary_x2)) if written else None)
+        x2b, zb = fence_z(x1, weights, bias, weighted_sum_broken,
+                          boundary_x2_broken)
+        yours = None
+        if written:
+            x2m, zm = fence_z(x1, weights, bias, weighted_sum, boundary_x2)
+            yours = Cell(zm, detail=f"x2={x2m:+.2f}  ->")
+        t.add(label, 0.0, Cell(zb, detail=f"x2={x2b:+.2f}  ->"), yours)
     return t.render()
 
 
@@ -350,8 +353,8 @@ if __name__ == "__main__":
             (-0.5, (-2.0, -3.0), -1.5),  # both weights negative
             (0.0, (1.0, 1.0), 0.0),      # a fence through the origin
         ],
-        "no expected numbers here: each row asks the neuron itself whether it "
-        "flips either side of the x2 your fence returned"))
+        "no answer key here: each row feeds the x2 your fence returned back "
+        "into your own neuron. on the fence, z is zero"))
 
     summary(results)
 
