@@ -101,7 +101,9 @@ def boundary_x2(x1, weights, bias):
     Assume weights[0] is not zero. (When it is, the fence is a vertical line
     and no function of x1 can describe it. Nothing here tests that case.)
     """
-    return (x1 / weights[0]) - bias
+    firstw, secondw = weights
+    return (0 - bias - (x1 * firstw)) / secondw
+
 
 
 # ---------------------------------------------------------------- test harness
