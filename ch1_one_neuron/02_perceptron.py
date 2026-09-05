@@ -86,17 +86,17 @@ def updated_bias_broken(b, err, rate):
 
 def error(target, prediction):
     """How wrong were we, and in which direction?"""
-    raise NotImplementedError
+    return target - prediction
 
 
 def updated_weight(w, x, err, rate):
     """Where should the weight on input x move to?"""
-    raise NotImplementedError
+    return w + (rate * err * x)
 
 
 def updated_bias(b, err, rate):
     """Where should the bias move to?"""
-    raise NotImplementedError
+    return b + err * rate
 
 
 # ---------------------------------------------------------------- test harness
