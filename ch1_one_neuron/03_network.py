@@ -216,8 +216,6 @@ def updated_weight_broken(w, delta, incoming, rate):
 def output_delta(y, target):
     """Delta for the output unit, which can see the target."""
     err = y - target
-    if err == 0:
-        return err
     return  err * sigmoid_slope(y)
 
 
@@ -228,7 +226,10 @@ def hidden_delta(h, w_out, out_delta):
     w_out    the weight it sent that value along
     out_delta  the delta of the unit on the other end of that weight
     """
-    return w_out - (h * out_delta)
+    adjusted = w_out * out_delta
+    if adjusted == 0:
+        return 0
+    return adjusted * sigmoid_slope(h)
 
 
 def updated_weight(w, delta, incoming, rate):
