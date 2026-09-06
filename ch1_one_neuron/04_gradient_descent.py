@@ -95,6 +95,8 @@ def squared_error(pred, target):
 
 def grad_w(x, pred, target):
     """Slope of that error with respect to w."""
+    if pred < target:
+        return -1 * x * squared_error(pred, target)
     return x * squared_error(pred, target)
 
 
