@@ -20,7 +20,7 @@ respect to one knob. Positive slope means turning the knob up makes things
 worse, so you turn it down. That is the whole algorithm, and it is what 03's
 deltas were secretly doing all along.
 
-TRAINING vs INFERENCE -- the distinction you asked about lives here
+TRAINING vs INFERENCE
 
     inference   run predict(). That is it. No targets are consulted, nothing
                 is measured, no knob moves. You could delete the other four
@@ -85,17 +85,17 @@ def gradient_step_broken(param, grad, rate):
 
 def predict(x, w, b):
     """The model: given x and the knobs, guess y."""
-    raise NotImplementedError
+    return x * w + b
 
 
 def squared_error(pred, target):
     """How bad was this one guess?"""
-    raise NotImplementedError
+    return (pred - target)**2
 
 
 def grad_w(x, pred, target):
     """Slope of that error with respect to w."""
-    raise NotImplementedError
+    return x * squared_error(pred, target)
 
 
 def grad_b(pred, target):
