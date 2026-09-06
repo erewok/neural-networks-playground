@@ -687,6 +687,98 @@ def matmul_figure(matmul_fn, transpose_fn):
     return fig
 
 
+# ------------------------------------------------------------------ exercise 6
+
+
+def _heat(ax, M, label, sub, vmax):
+    """A grid of numbers, tinted by sign and magnitude.
+
+    Hue still means what it means everywhere else -- blue one side of zero,
+    orange the other -- and only lightness carries magnitude, with paper-white
+    at exactly zero.
+    """
+    A = np.asarray(M, dtype=float)
+    ax.imshow(A, cmap=_signed_ramp(), vmin=-vmax, vmax=vmax, aspect="auto",
+              extent=(0, A.shape[1], A.shape[0], 0), zorder=1)
+    for i in range(A.shape[0]):
+        for j in range(A.shape[1]):
+            ax.text(j + 0.5, i + 0.5, f"{A[i, j]:+.3f}", ha="center",
+                    va="center", fontsize=11, color=INK, zorder=3)
+    ax.set_xticks(np.arange(A.shape[1]) + 0.5)
+    ax.set_yticks(np.arange(A.shape[0]) + 0.5)
+    ax.set_xticklabels([f"unit {j}" for j in range(A.shape[1])], fontsize=8.5)
+    ax.set_yticklabels([f"feature {i}" for i in range(A.shape[0])], fontsize=8.5)
+    ax.tick_params(length=0)
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    title(ax, label, sub)
+
+
+def linear_grad_figure(W, measured, analytic):
+    """The difference quotient and the closed form, entry by entry."""
+    theme()
+    vmax = max(abs(v) for M in (measured, analytic) for row in M for v in row)
+    vmax = max(vmax, 1e-9)
+    worst = max(abs(a - b) for ra, rb in zip(measured, analytic)
+                for a, b in zip(ra, rb))
+
+    fig = figure(figsize=(13.2, 5.2))
+    ax = fig.add_subplot(1, 3, 1)
+    _heat(ax, measured, "measured", "one loss minus another, over h", vmax)
+    ax = fig.add_subplot(1, 3, 2)
+    _heat(ax, analytic, "your grad_W", "one matmul, no h anywhere", vmax)
+
+    ax = fig.add_subplot(1, 3, 3)
+    ax.axis("off")
+    ax.text(0, 0.97,
+            "Every cell is one slope:\n"
+            "add h to that ONE weight,\n"
+            "see how much the loss moves,\n"
+            "divide by h.\n\n"
+            f"grad_W is {len(W)} x {len(W[0])}, the shape\n"
+            "of W. One answer per knob,\n"
+            "laid out the way the knobs are.\n\n"
+            f"largest disagreement between\n"
+            f"the two panels:  {worst:.2e}\n\n"
+            "The left panel costs one whole\n"
+            f"forward pass per cell, {len(W) * len(W[0])} of them.\n"
+            "The right panel costs one\n"
+            "matmul for the entire grid.\n"
+            "That is why nobody trains by\n"
+            "difference quotient.",
+            va="top", fontsize=9.8, color=INK, linespacing=1.5,
+            family="monospace")
+
+    fig.suptitle("The same gradient, measured and derived",
+                 x=0.02, y=0.99, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    return fig
+
+
+def two_layer_loss_figure(history):
+    """Two linear layers trained through grad_x, on a log axis."""
+    theme()
+    fig = figure(figsize=(7.6, 4.8))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(range(len(history)), history, color=FIRES, lw=2.2)
+    ax.set_yscale("log")
+    ax.set_xlabel("gradient step")
+    ax.set_ylabel("mean squared error")
+    ax.annotate(f"start  {history[0]:.4f}", (0, history[0]),
+                xytext=(14, 6), textcoords="offset points", fontsize=9.5,
+                color=FIRES, fontweight="bold")
+    ax.annotate(f"end  {history[-1]:.2e}", (len(history) - 1, history[-1]),
+                xytext=(-8, 28), textcoords="offset points", ha="right",
+                fontsize=9.5, color=FIRES, fontweight="bold")
+    title(ax, "Two linear layers, trained",
+          "the only thing connecting them is layer 2's grad_x becoming "
+          "layer 1's dY")
+    fig.tight_layout()
+    return fig
+
+
 # ------------------------------------------------------------------ exercise 3
 
 

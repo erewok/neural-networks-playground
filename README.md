@@ -50,6 +50,8 @@ I asked Claude to write these for me and I complained about them not being broke
 ### `ch2_arrays/`
 
 - `05_vectors.py` — dot, matmul, transpose. Chapter 1 in scalars; everything after this in matrices.
+- `06_linear_layer.py` — a whole layer at once, forwards and backwards. The gradients are
+  measured by nudging one weight at a time before they are written down.
 
 ### and then
 
