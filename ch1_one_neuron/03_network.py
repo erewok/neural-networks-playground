@@ -210,15 +210,15 @@ def updated_weight_broken(w, delta, incoming, rate):
 
 # ---------------------------------------------------------------------- yours
 # Write these three. Each is a single expression, and sigmoid_slope() is already
-# written for you. The tables sfcore whichever ones exist, so go one at a time.
+# written for you. The tables score whichever ones exist, so go one at a time.
 
 
 def output_delta(y, target):
     """Delta for the output unit, which can see the target."""
-    val = (0.5 * (y - target)**2)
-    if target > y:
-        return -1 * val
-    return val
+    err = y - target
+    if err == 0:
+        return err
+    return  err * sigmoid_slope(y)
 
 
 def hidden_delta(h, w_out, out_delta):
@@ -228,13 +228,13 @@ def hidden_delta(h, w_out, out_delta):
     w_out    the weight it sent that value along
     out_delta  the delta of the unit on the other end of that weight
     """
-    raise NotImplementedError
+    return w_out - (h * out_delta)
 
 
 def updated_weight(w, delta, incoming, rate):
     """Move one weight. `delta` belongs to the unit this weight feeds into,
     `incoming` is the value that travelled along it."""
-    raise NotImplementedError
+    return w - (delta * incoming * rate)
 
 
 # ---------------------------------------------------------------- test harness
