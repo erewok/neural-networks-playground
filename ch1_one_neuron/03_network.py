@@ -210,12 +210,15 @@ def updated_weight_broken(w, delta, incoming, rate):
 
 # ---------------------------------------------------------------------- yours
 # Write these three. Each is a single expression, and sigmoid_slope() is already
-# written for you. The tables score whichever ones exist, so go one at a time.
+# written for you. The tables sfcore whichever ones exist, so go one at a time.
 
 
 def output_delta(y, target):
     """Delta for the output unit, which can see the target."""
-    raise NotImplementedError
+    val = (0.5 * (y - target)**2)
+    if target > y:
+        return -1 * val
+    return val
 
 
 def hidden_delta(h, w_out, out_delta):
