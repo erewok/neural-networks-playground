@@ -52,10 +52,17 @@ I asked Claude to write these for me and I complained about them not being broke
 - `05_vectors.py` — dot, matmul, transpose. Chapter 1 in scalars; everything after this in matrices.
 - `06_linear_layer.py` — a whole layer at once, forwards and backwards. The gradients are
   measured by nudging one weight at a time before they are written down.
+- `07_autodiff.py` — a rule per operation and an order to apply them in. Rebuilds 03's
+  network out of add, mul and sigmoid and trains XOR with nothing derived by hand.
+
+### `ch3_training/`
+
+- `08_activations.py` — relu, tanh and gelu, and what a stack of 24 of them does to a
+  gradient. The reason sigmoid was a problem.
 
 ### and then
 
-`ch3_training/`, `ch4_structure/`, `ch5_attention/` are empty so far.
+`ch4_structure/`, `ch5_attention/` are empty so far.
 
 ## Where This Is Going
 

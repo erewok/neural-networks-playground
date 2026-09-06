@@ -779,6 +779,275 @@ def two_layer_loss_figure(history):
     return fig
 
 
+# ------------------------------------------------------------------ exercise 7
+
+
+def _node_box(ax, cx, cy, spec, w=1.5, h=0.92):
+    """One node: its label, the value it holds, and the gradient on it."""
+    from matplotlib.patches import FancyBboxPatch
+
+    leaf = spec["op"] == "leaf"
+    ax.add_patch(FancyBboxPatch(
+        (cx - w / 2, cy - h / 2), w, h,
+        boxstyle="round,pad=0.06,rounding_size=0.12",
+        facecolor="#eef2f7" if leaf else SURFACE,
+        edgecolor=INK_SOFT if leaf else GRID, linewidth=1.4, zorder=3))
+    ax.text(cx, cy + 0.26, spec["label"], ha="center", va="center",
+            fontsize=11, fontweight="bold", color=INK, zorder=4)
+    ax.text(cx, cy + 0.02, f"{spec['value']:.4f}", ha="center", va="center",
+            fontsize=9.5, color=INK_SOFT, zorder=4)
+    ax.text(cx, cy - 0.25, f"grad {spec['grad']:+.4f}", ha="center",
+            va="center", fontsize=9.5, zorder=4,
+            color=FIRES if spec["grad"] >= 0 else QUIET)
+
+
+def graph_figure(spec):
+    """A computation graph with the local gradient written on every edge.
+
+    spec: the list of dicts 07 builds, one per node, each with id, label, op,
+    value, grad, depth and (parent_id, local_gradient) pairs.
+    """
+    theme()
+    by_id = {n["id"]: n for n in spec}
+    columns = {}
+    for n in spec:
+        columns.setdefault(n["depth"], []).append(n)
+
+    pos = {}
+    tallest = max(len(c) for c in columns.values())
+    for depth, nodes in columns.items():
+        for k, n in enumerate(nodes):
+            span = (len(nodes) - 1) / 2.0
+            pos[n["id"]] = (depth * 2.9, (span - k) * 1.5)
+
+    fig = figure(figsize=(12.6, 1.9 + 1.5 * tallest))
+    ax = fig.add_subplot(1, 3, (1, 2))
+
+    for n in spec:
+        x1, y1 = pos[n["id"]]
+        for pid, local in n["parents"]:
+            x0, y0 = pos[pid]
+            ax.annotate("", xy=(x1 - 0.82, y1), xytext=(x0 + 0.82, y0),
+                        arrowprops=dict(arrowstyle="-|>", color=INK_SOFT,
+                                        linewidth=1.3, shrinkA=0, shrinkB=0,
+                                        connectionstyle="arc3,rad=0.0"),
+                        zorder=1)
+            # 0.72 of the way along rather than the midpoint: edges that
+            # cross would otherwise stack their labels on the crossing point.
+            ax.text(x0 + 0.72 * (x1 - x0), y0 + 0.72 * (y1 - y0) + 0.17,
+                    f"{local:+.4f}",
+                    ha="center", va="bottom", fontsize=9,
+                    color=ACCENT, fontweight="bold", zorder=5,
+                    bbox=dict(boxstyle="round,pad=0.18", facecolor=SURFACE,
+                              edgecolor="none"))
+
+    for n in spec:
+        _node_box(ax, *pos[n["id"]], n)
+
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    ax.set_xlim(min(xs) - 1.2, max(xs) + 1.2)
+    ax.set_ylim(min(ys) - 1.0, max(ys) + 1.0)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    title(ax, "One expression, drawn",
+          "green numbers are local gradients: how much this node moves when "
+          "that parent moves")
+
+    leaves = [n for n in spec if n["op"] == "leaf"]
+    out = spec[-1]
+    lines = ["The green number on an edge is\n"
+             "one local rule, evaluated with\n"
+             "up = 1. It only involves the two\n"
+             "nodes the edge joins.\n"]
+    for lf in leaves:
+        paths = _paths(by_id, out["id"], lf["id"])
+        if not paths:
+            continue
+        terms = " + ".join(
+            " x ".join(f"{g:.4f}" for g in path) or "1" for path in paths)
+        total = sum(_product(path) for path in paths)
+        lines.append(f"grad on {lf['label']}: {len(paths)} path"
+                     f"{'s' if len(paths) != 1 else ''} from {out['label']}\n"
+                     f"  {terms}\n  = {total:+.4f}\n")
+    lines.append("Multiply along a path, add across\n"
+                 "paths. backward() does exactly\n"
+                 "that without ever listing a path,\n"
+                 "by accumulating into each node.")
+
+    ax = fig.add_subplot(1, 3, 3)
+    ax.axis("off")
+    ax.text(0, 0.98, "\n".join(lines), va="top", fontsize=9.6, color=INK,
+            linespacing=1.5, family="monospace")
+
+    fig.suptitle("Local rules on the edges, gradients in the boxes",
+                 x=0.02, y=0.99, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    return fig
+
+
+def _paths(by_id, from_id, to_id):
+    """Every route from the output down to one leaf, as lists of edge values."""
+    if from_id == to_id:
+        return [[]]
+    out = []
+    for pid, local in by_id[from_id]["parents"]:
+        for rest in _paths(by_id, pid, to_id):
+            out.append([local] + rest)
+    return out
+
+
+def _product(values):
+    total = 1.0
+    for v in values:
+        total *= v
+    return total
+
+
+def xor_autodiff_figure(history):
+    """XOR trained through the three local rules, with nothing derived."""
+    theme()
+    fig = figure(figsize=(7.6, 4.8))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(range(len(history)), history, color=FIRES, lw=2.2)
+    ax.set_yscale("log")
+    ax.set_xlabel("gradient step")
+    ax.set_ylabel("mean loss over the four XOR examples")
+    ax.annotate(f"start  {history[0]:.4f}", (0, history[0]),
+                xytext=(14, 8), textcoords="offset points", fontsize=9.5,
+                color=FIRES, fontweight="bold")
+    ax.annotate(f"end  {history[-1]:.2e}", (len(history) - 1, history[-1]),
+                xytext=(-8, 26), textcoords="offset points", ha="right",
+                fontsize=9.5, color=FIRES, fontweight="bold")
+    title(ax, "03's network, trained by autodiff",
+          "same architecture as 03, and no gradient in it was derived by hand")
+    fig.tight_layout()
+    return fig
+
+
+# ------------------------------------------------------------------ exercise 8
+
+# Four series, and the palette only guarantees separation for three. The fourth
+# takes INK, and every line is labelled at its own right-hand end, so nothing
+# in these two figures depends on colour to be read.
+ACT_COLOURS = {"sigmoid": QUIET, "tanh": ACCENT, "relu": FIRES, "gelu": INK}
+
+# relu and gelu sit on top of each other for most of the positive axis, so relu
+# is drawn wide and gelu is drawn through it.
+ACT_WIDTH = {"sigmoid": 2.1, "tanh": 2.1, "relu": 3.4, "gelu": 1.8}
+
+
+def _label_series(ax, x, items, min_gap=0.065):
+    """items: [(y, text, colour)], labelled just right of x.
+
+    Two lines that finish at the same height would print their labels on top of
+    each other, so the labels are pushed apart in axes-fraction space first.
+    Call after the limits and the scale are set.
+    """
+    ylo, yhi = ax.get_ylim()
+    log = ax.get_yscale() == "log"
+    lo, hi = (np.log10(ylo), np.log10(yhi)) if log else (ylo, yhi)
+
+    def to_frac(y):
+        return ((np.log10(y) if log else y) - lo) / (hi - lo)
+
+    def to_data(f):
+        return 10 ** (lo + f * (hi - lo)) if log else lo + f * (hi - lo)
+
+    fracs = [to_frac(y) for y, _, _ in items]
+    order = sorted(range(len(items)), key=lambda i: fracs[i])
+    for k in range(1, len(order)):
+        below, above = order[k - 1], order[k]
+        if fracs[above] - fracs[below] < min_gap:
+            fracs[above] = fracs[below] + min_gap
+    # Pushing apart can carry the top label off the axes, where it would not
+    # be drawn at all. Slide the whole set back down if that happened.
+    overshoot = max(fracs) - 1.0
+    if overshoot > 0:
+        fracs = [f - overshoot for f in fracs]
+
+    for (_, text, colour), f in zip(items, fracs):
+        ax.annotate(text, (x, to_data(f)), xytext=(8, 0),
+                    textcoords="offset points", fontsize=9.5, color=colour,
+                    fontweight="bold", va="center")
+
+
+def activation_figure(entries):
+    """entries: [(name, value_fn, slope_fn)] -- the function, then its slope."""
+    theme()
+    zs = np.linspace(-5, 5, 601)
+
+    fig = figure(figsize=(12.4, 4.8))
+    panels = [
+        (1, lambda name, f, s: [f(z) for z in zs], (-1.4, 5.2), "The functions",
+         "relu and gelu run off the top of the panel; sigmoid and tanh cannot"),
+        (2, lambda name, f, s: [s(z) for z in zs], (-0.15, 1.25), "Their slopes",
+         "a stack of d layers multiplies d of these together"),
+    ]
+    for pos, values, ylim, head, sub in panels:
+        ax = fig.add_subplot(1, 2, pos)
+        ax.axhline(0, color=GRID, lw=1)
+        ax.axvline(0, color=GRID, lw=1)
+        ends = []
+        for name, f, s in entries:
+            ys = values(name, f, s)
+            ax.plot(zs, ys, color=ACT_COLOURS[name], lw=ACT_WIDTH[name])
+            ends.append((ys[-1], name, ACT_COLOURS[name]))
+        if pos == 2:
+            ax.axhline(0.25, color=QUIET, lw=1.1, ls=":")
+            ax.annotate("sigmoid never gets steeper than 0.25", (-4.9, 0.27),
+                        fontsize=9, color=QUIET, va="bottom")
+        ax.set_xlim(-5, 6.6)
+        ax.set_ylim(*ylim)
+        ax.set_xlabel("z")
+        _label_series(ax, zs[-1], ends)
+        title(ax, head, sub)
+
+    fig.suptitle("Four activations, and the numbers a deep stack multiplies",
+                 x=0.02, y=0.99, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.tight_layout(rect=[0, 0, 1, 0.92])
+    return fig
+
+
+def depth_figure(profiles, shown_depths):
+    """profiles: {scale label: {activation: [gradient norm at each depth]}}."""
+    theme()
+    labels = list(profiles)
+    fig = figure(figsize=(12.4, 5.0))
+
+    floor = min(v for rows in profiles.values() for norms in rows.values()
+                for v in norms if v > 0)
+    ceiling = max(v for rows in profiles.values() for norms in rows.values()
+                  for v in norms)
+
+    for pos, label in enumerate(labels, 1):
+        ax = fig.add_subplot(1, len(labels), pos)
+        rows = profiles[label]
+        depth = max(len(n) for n in rows.values())
+        ends = []
+        for name, norms in rows.items():
+            ax.plot(range(1, len(norms) + 1), norms,
+                    color=ACT_COLOURS[name], lw=ACT_WIDTH[name])
+            ends.append((norms[-1], name, ACT_COLOURS[name]))
+        ax.set_yscale("log")
+        ax.set_xlim(1, depth * 1.22)
+        ax.set_ylim(floor * 0.3, ceiling * 3)
+        ax.set_xticks(list(shown_depths))
+        ax.set_xlabel("layers the gradient came back through")
+        if pos == 1:
+            ax.set_ylabel("gradient norm")
+        _label_series(ax, depth, ends)
+        title(ax, label.split(",")[0], label.split(",", 1)[1].strip())
+
+    fig.suptitle("The same four activations, two weight scales",
+                 x=0.02, y=0.99, ha="left", fontsize=13, fontweight="bold",
+                 color=INK)
+    fig.tight_layout(rect=[0, 0, 1, 0.9])
+    return fig
+
+
 # ------------------------------------------------------------------ exercise 3
 
 
