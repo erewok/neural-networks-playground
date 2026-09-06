@@ -102,12 +102,12 @@ def grad_w(x, pred, target):
 
 def grad_b(pred, target):
     """Slope of that error with respect to b."""
-    raise NotImplementedError
+    return 2 * (pred - target)
 
 
 def gradient_step(param, grad, rate):
     """Move one knob, given its slope and how big a step to take."""
-    raise NotImplementedError
+    return param - (grad * rate)
 
 
 # ---------------------------------------------------------------- test harness
